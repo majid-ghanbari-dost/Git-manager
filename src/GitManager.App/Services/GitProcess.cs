@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace GitManager.App.Services;
 
-public sealed class GitProcess
+public class GitProcess
 {
     public Task<string> RunAsync(string workingDirectory, params string[] arguments) =>
         RunCoreAsync(workingDirectory, CancellationToken.None, arguments);
@@ -13,7 +13,7 @@ public sealed class GitProcess
         params string[] arguments) =>
         RunCoreAsync(workingDirectory, cancellationToken, arguments);
 
-    private static async Task<string> RunCoreAsync(
+    protected virtual async Task<string> RunCoreAsync(
         string workingDirectory,
         CancellationToken cancellationToken,
         string[] arguments)

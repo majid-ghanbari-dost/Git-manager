@@ -94,6 +94,7 @@ public class ProjectOperationJournal
         string? error = null,
         CancellationToken cancellationToken = default)
     {
+        await InitializeAsync(cancellationToken);
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         var command = connection.CreateCommand();
@@ -110,9 +111,10 @@ public class ProjectOperationJournal
             throw new InvalidOperationException("رکورد عملیات در Recovery Journal پیدا نشد.");
     }
 
-    public async Task<IReadOnlyList<ProjectOperationEntry>> GetInterruptedAsync(
+    public virtual async Task<IReadOnlyList<ProjectOperationEntry>> GetInterruptedAsync(
         CancellationToken cancellationToken = default)
     {
+        await InitializeAsync(cancellationToken);
         var result = new List<ProjectOperationEntry>();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -140,6 +142,7 @@ public class ProjectOperationJournal
 
     public async Task<ProjectOperationEntry?> GetAsync(string operationId, CancellationToken cancellationToken = default)
     {
+        await InitializeAsync(cancellationToken);
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         var command = connection.CreateCommand();

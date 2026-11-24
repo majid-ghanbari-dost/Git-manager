@@ -44,7 +44,8 @@
                     <TextBox Text="{Binding RepositoryUrl, UpdateSourceTrigger=PropertyChanged}" Padding="9" Margin="0,5,0,12" FlowDirection="LeftToRight"/>
                     <TextBlock Text="دسته‌بندی" Foreground="#526273"/>
                     <ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" Padding="7" Margin="0,5,0,12"/>
-                    <Button Content="دریافت و ثبت پروژه" Command="{Binding CloneCommand}" Background="#315C8C" Foreground="White" BorderThickness="0"/>
+                    <Button Content="دریافت و ثبت پروژه" Command="{Binding CloneCommand}" ToolTip="{Binding CloneDisabledReason}" Background="#315C8C" Foreground="White" BorderThickness="0"/>
+                    <TextBlock Text="{Binding CloneDisabledReason}" Foreground="#9A5B20" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     <Separator Margin="0,18,0,12"/>
                     <TextBlock Text="مدیریت دسته‌بندی‌ها" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
                     <TextBlock Text="دسته‌بندی جدید" Foreground="#526273"/>

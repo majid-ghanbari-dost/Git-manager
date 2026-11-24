@@ -22,6 +22,7 @@
 - [x] Authentication through configured Git credential helper
 - [x] Staged full-history clone and remote verification
 - [x] Duplicate detection and no-overwrite destination handling
+- [x] Journal bootstrap so first-run Clone is not blocked by a missing `project_operations` table (WP-2.5.1; not merged)
 - [ ] Permission and repository metadata preview
 - [ ] Explicit retry/resume workflow for interrupted clones
 

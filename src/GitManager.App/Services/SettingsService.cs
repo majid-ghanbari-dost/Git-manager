@@ -4,7 +4,12 @@ namespace GitManager.App.Services;
 
 public sealed class SettingsService
 {
-    private readonly string _settingsPath = AppLocalState.SettingsPath;
+    private readonly string _settingsPath;
+
+    public SettingsService(string? settingsPath = null)
+    {
+        _settingsPath = settingsPath ?? AppLocalState.SettingsPath;
+    }
 
     public async Task<string?> LoadWorkspaceAsync()
     {

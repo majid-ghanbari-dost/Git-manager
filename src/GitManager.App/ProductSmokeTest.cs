@@ -50,6 +50,13 @@ public static class ProductSmokeTest
         var journal = new ProjectOperationJournal(Path.Combine(root, "smoke-operations.sqlite3"));
         await journal.InitializeAsync();
 
+        var freshJournalPath = Path.Combine(root, "fresh-operations.sqlite3");
+        var freshJournal = new ProjectOperationJournal(freshJournalPath);
+        if ((await freshJournal.GetInterruptedAsync()).Count != 0)
+            throw new InvalidOperationException("Fresh journal bootstrap must yield no interrupted operations.");
+        if (!File.Exists(freshJournalPath))
+            throw new InvalidOperationException("Fresh journal bootstrap did not create the SQLite file.");
+
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localAppData) ||
             !AppLocalState.Root.StartsWith(Path.GetFullPath(localAppData), StringComparison.OrdinalIgnoreCase))
