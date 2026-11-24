@@ -73,6 +73,35 @@ public sealed class RepositoryImportTests
     }
 
     [Fact]
+    public async Task Clone_CorruptJournal_DoesNotCreatePartialProject()
+    {
+        var root = NewRoot();
+        try
+        {
+            var journalPath = Path.Combine(root, "operations.sqlite3");
+            await File.WriteAllTextAsync(journalPath, "CORRUPT-NOT-SQLITE-" + new string('X', 1024));
+            var git = new ScriptedGitProcess("https://github.com/octocat/Hello-World.git");
+            var opened = await LibraryStartup.OpenAsync(
+                root,
+                new ProjectOperationJournal(journalPath),
+                git,
+                new ProjectOperationLock(Path.Combine(root, "locks")));
+            Assert.False(opened.JournalUsable);
+
+            var destination = new WorkspaceService().GetProjectContainer(
+                root, "Active", "Unclassified", "octocat", "Hello-World");
+            var ex = await Assert.ThrowsAsync<JournalUnavailableException>(
+                () => opened.Importer.CloneAsync(root, PublicCloneUrl, "Unclassified"));
+            Assert.Equal(JournalUnavailableException.UserMessage, ex.Message);
+            Assert.Empty(await opened.Catalog.GetProjectsAsync());
+            Assert.False(Directory.Exists(destination));
+            Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(root, "00_Manager", "temp")));
+            Assert.False(git.CloneWasInvoked);
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
     public async Task Clone_RealPublicRepository_RegistersInCatalogAndIsOpenable()
     {
         var root = NewRoot();
@@ -108,6 +137,9 @@ public sealed class RepositoryImportTests
 
     private sealed class ScriptedGitProcess(string originUrl) : GitProcess
     {
+        public bool CloneWasInvoked { get; private set; }
+        public string[]? LastCloneArguments { get; private set; }
+
         protected override Task<string> RunCoreAsync(
             string workingDirectory,
             CancellationToken cancellationToken,
@@ -116,6 +148,8 @@ public sealed class RepositoryImportTests
             cancellationToken.ThrowIfCancellationRequested();
             if (arguments.Length >= 4 && arguments[0] == "clone" && arguments[1] == "--")
             {
+                CloneWasInvoked = true;
+                LastCloneArguments = arguments;
                 var destination = arguments[3];
                 Directory.CreateDirectory(Path.Combine(destination, ".git"));
                 File.WriteAllText(Path.Combine(destination, "README.md"), "unit-clone");

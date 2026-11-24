@@ -23,6 +23,8 @@ public sealed class GitHubRemoteTests
     [InlineData("file:///C:/repo")]
     [InlineData("https://github.com/owner/repo/extra")]
     [InlineData("https://github.com/owner/repo?redirect=1")]
+    [InlineData("https://user:token@github.com/owner/repo")]
+    [InlineData("https://user@github.com/owner/repo")]
     public void Parse_RejectsUnsupportedOrAmbiguousUrls(string input)
     {
         Assert.Throws<InvalidOperationException>(() => GitHubRemote.Parse(input));

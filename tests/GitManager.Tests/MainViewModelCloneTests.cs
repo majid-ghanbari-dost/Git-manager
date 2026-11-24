@@ -25,6 +25,7 @@ public sealed class MainViewModelCloneTests
 
             Assert.True(vm.IsCatalogOpen);
             Assert.False(vm.SensitiveOperationsLimited);
+            Assert.True(vm.JournalUsable);
             Assert.True(vm.CloneCommand.CanExecute(null));
             Assert.Equal("", vm.CloneDisabledReason);
             Assert.True(vm.RestoreCommand.CanExecute(null));
@@ -50,7 +51,9 @@ public sealed class MainViewModelCloneTests
 
             Assert.True(vm.IsCatalogOpen);
             Assert.True(vm.SensitiveOperationsLimited);
+            Assert.True(vm.JournalUsable);
             Assert.Contains("عملیات حساس تا رفع مشکل محدود است", vm.StatusMessage);
+            Assert.DoesNotContain("simulated interrupted-operation read failure", vm.StatusMessage);
 
             vm.RepositoryUrl = "https://github.com/octocat/Hello-World";
             Assert.True(vm.CloneCommand.CanExecute(null));
@@ -59,6 +62,34 @@ public sealed class MainViewModelCloneTests
             Assert.False(vm.BackupCommand.CanExecute(null));
             vm.RenameCategoryName = "NewName";
             Assert.False(vm.RenameCategoryCommand.CanExecute(null));
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
+    public async Task CorruptJournal_DisablesClone_WithPersianReason()
+    {
+        var root = NewRoot();
+        try
+        {
+            var journalPath = Path.Combine(root, "operations.sqlite3");
+            await File.WriteAllTextAsync(journalPath, "CORRUPT-NOT-SQLITE-" + new string('X', 1024));
+            var vm = new MainViewModel(
+                new SettingsService(Path.Combine(root, "settings.json")),
+                new ProjectOperationJournal(journalPath),
+                new GitProcess(),
+                new ProjectOperationLock(Path.Combine(root, "locks")));
+            await vm.OpenWorkspaceAsync(Path.Combine(root, "workspace"));
+
+            Assert.True(vm.IsCatalogOpen);
+            Assert.True(vm.SensitiveOperationsLimited);
+            Assert.False(vm.JournalUsable);
+            vm.RepositoryUrl = "https://github.com/octocat/Hello-World";
+            Assert.False(vm.CloneCommand.CanExecute(null));
+            Assert.Equal(CloneCommandGate.JournalUnavailableReason, vm.CloneDisabledReason);
+            Assert.Contains("دفتر ثبت عملیات قابل استفاده نیست", vm.StatusMessage);
+            Assert.DoesNotContain("SQLite", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(journalPath, vm.StatusMessage);
         }
         finally { DeleteRoot(root); }
     }

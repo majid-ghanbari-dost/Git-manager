@@ -27,29 +27,62 @@ public class ProjectOperationJournal
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            PRAGMA journal_mode=WAL;
-            PRAGMA synchronous=FULL;
-            CREATE TABLE IF NOT EXISTS project_operations (
-                operation_id TEXT PRIMARY KEY,
-                operation_type TEXT NOT NULL,
-                operation_key TEXT NOT NULL,
-                project_id TEXT NULL,
-                staging_path TEXT NOT NULL,
-                final_path TEXT NOT NULL,
-                state TEXT NOT NULL,
-                error TEXT NULL,
-                created_at_utc TEXT NOT NULL,
-                updated_at_utc TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS ix_project_operations_state
-                ON project_operations(state, updated_at_utc);
-            """;
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        try
+        {
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=FULL;
+                CREATE TABLE IF NOT EXISTS project_operations (
+                    operation_id TEXT PRIMARY KEY,
+                    operation_type TEXT NOT NULL,
+                    operation_key TEXT NOT NULL,
+                    project_id TEXT NULL,
+                    staging_path TEXT NOT NULL,
+                    final_path TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    error TEXT NULL,
+                    created_at_utc TEXT NOT NULL,
+                    updated_at_utc TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_project_operations_state
+                    ON project_operations(state, updated_at_utc);
+                """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex) when (IsStorageFailure(ex))
+        {
+            throw new JournalUnavailableException(ex);
+        }
     }
+
+    public async Task EnsureAvailableAsync(CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        try
+        {
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+            var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA integrity_check;";
+            var result = await command.ExecuteScalarAsync(cancellationToken) as string;
+            if (!string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase))
+                throw new JournalUnavailableException();
+        }
+        catch (JournalUnavailableException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsStorageFailure(ex))
+        {
+            throw new JournalUnavailableException(ex);
+        }
+    }
+
+    private static bool IsStorageFailure(Exception ex) =>
+        ex is SqliteException or IOException or UnauthorizedAccessException;
 
     public async Task<ProjectOperationEntry> BeginAsync(
         string operationType,
@@ -59,7 +92,7 @@ public class ProjectOperationJournal
         string finalPath,
         CancellationToken cancellationToken = default)
     {
-        await InitializeAsync(cancellationToken);
+        await EnsureAvailableAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var entry = new ProjectOperationEntry(
             Guid.NewGuid().ToString("N"), operationType, operationKey, projectId,
@@ -84,7 +117,14 @@ public class ProjectOperationJournal
         command.Parameters.AddWithValue("$state", entry.State);
         command.Parameters.AddWithValue("$created", now.ToString("O"));
         command.Parameters.AddWithValue("$updated", now.ToString("O"));
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        try
+        {
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex) when (IsStorageFailure(ex))
+        {
+            throw new JournalUnavailableException(ex);
+        }
         return entry;
     }
 

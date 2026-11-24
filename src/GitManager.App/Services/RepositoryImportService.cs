@@ -31,6 +31,7 @@ public sealed class RepositoryImportService
         CancellationToken cancellationToken = default)
     {
         var remote = GitHubRemote.Parse(url);
+        await _journal.EnsureAvailableAsync(cancellationToken);
         var lockKey = "import:" + remote.CanonicalUrl;
         await using var lease = await _operationLock.AcquireAsync(lockKey, cancellationToken);
         var existing = (await _catalog.GetProjectsAsync()).FirstOrDefault(p =>

@@ -51,11 +51,11 @@ Windows CI run `45365248926` on `eb434a9` succeeded, including installer smoke. 
 ## WP-2.5.1 on `work/wp-2-5-1-journal-clone-bootstrap`
 
 - Operation journal bootstraps `project_operations` before any read/write.
-- Recovery failure no longer leaves the catalog unset; the library opens, Clone stays available, and journal-backed mutations stay limited with a Persian status.
-- Clone enables when the library is open and a GitHub URL is present; disabled reasons are Persian.
-- Tests cover fresh install, empty SQLite, upgrade without data loss, scripted Clone registration, and a real public GitHub clone.
+- Recovery failure no longer leaves the catalog unset; the library opens and journal-backed mutations stay limited with a Persian status. Exception details stay in the technical log.
+- Clone enables when the library is open, the journal can record an operation, and a GitHub URL is present; a corrupt journal disables Clone with a Persian reason and does not create a partial project.
+- Tests cover fresh install, empty SQLite, corrupt SQLite, upgrade without data loss, scripted Clone registration, a real public GitHub clone, and credential-boundary checks. Private GCM clone is reviewed in docs, not executed in CI.
 
-This work is not merged to `main`. Windows CI run `45386246393` on `a65cfe4` succeeded, including unit tests, the real public clone, and installer smoke. Pull request run `45386272862` also succeeded. It is not a Product Owner clean-machine test.
+This work is not merged to `main`. Windows CI run `45386246393` on `a65cfe4` succeeded for the initial bootstrap. Review follow-up CI is recorded only after a successful run on the latest branch head. It is not a Product Owner clean-machine test.
 
 ## Not yet release-ready
 

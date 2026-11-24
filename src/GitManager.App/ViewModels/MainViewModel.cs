@@ -22,6 +22,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private ProjectCategoryMoveService? _projectCategoryMover;
     private ProjectLifecycleService? _lifecycle;
     private bool _sensitiveOperationsLimited;
+    private bool _journalUsable;
     private readonly List<ProjectRecord> _allProjects = [];
     private string _newCategoryName = "";
     private string _renameCategoryName = "";
@@ -48,7 +49,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             CloneCommand.NotifyCanExecuteChanged();
         }
     }
-    public string CloneDisabledReason => CloneCommandGate.DisabledReason(_catalog is not null, RepositoryUrl);
+    public string CloneDisabledReason =>
+        CloneCommandGate.DisabledReason(_catalog is not null, _journalUsable, RepositoryUrl);
     public string SelectedCategory
     {
         get => _selectedCategory;
@@ -151,9 +153,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     internal bool IsCatalogOpen => _catalog is not null;
     internal bool SensitiveOperationsLimited => _sensitiveOperationsLimited;
+    internal bool JournalUsable => _journalUsable;
     internal Task OpenWorkspaceAsync(string path) => SetWorkspaceAsync(path);
 
-    private bool CanClone() => CloneCommandGate.CanExecute(_catalog is not null, RepositoryUrl);
+    private bool CanClone() => CloneCommandGate.CanExecute(_catalog is not null, _journalUsable, RepositoryUrl);
     private bool CanRunSensitive() => _catalog is not null && !_sensitiveOperationsLimited;
 
     public async Task InitializeAsync()
@@ -183,6 +186,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             _catalog = opened.Catalog;
             _importer = opened.Importer;
             _sensitiveOperationsLimited = opened.RecoveryLimited;
+            _journalUsable = opened.JournalUsable;
             await RefreshCategoriesAsync();
             WorkspacePath = Path.GetFullPath(path);
             await _settings.SaveWorkspaceAsync(WorkspacePath);
@@ -204,7 +208,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ArchiveProjectCommand.NotifyCanExecuteChanged();
             RestoreArchivedCommand.NotifyCanExecuteChanged();
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(path), "workspace", "library open failed", ex);
+            StatusMessage = "باز کردن کتابخانه انجام نشد. جزئیات در گزارش فنی ذخیره شد.";
+        }
     }
 
     private bool CanMoveCategoryUp()
@@ -318,7 +326,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
             await RefreshProjectsAsync();
             StatusMessage = $"پروژه {project.Owner}/{project.Repository} با موفقیت ثبت شد.";
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(WorkspacePath), "clone", "clone failed", ex);
+            StatusMessage = ex is InvalidOperationException
+                ? ex.Message
+                : "دریافت مخزن انجام نشد. جزئیات در گزارش فنی ذخیره شد.";
+        }
     }
 
     private async Task BackupSelectedAsync()

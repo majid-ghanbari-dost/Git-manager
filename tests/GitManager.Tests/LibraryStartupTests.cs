@@ -19,6 +19,7 @@ public sealed class LibraryStartupTests
                 new ProjectOperationLock(Path.Combine(root, "locks")));
 
             Assert.False(opened.RecoveryLimited);
+            Assert.True(opened.JournalUsable);
             Assert.NotNull(opened.Catalog);
             Assert.NotNull(opened.Importer);
             Assert.True(File.Exists(journalPath));
@@ -47,6 +48,7 @@ public sealed class LibraryStartupTests
                 new ProjectOperationLock(Path.Combine(root, "locks")));
 
             Assert.False(opened.RecoveryLimited);
+            Assert.True(opened.JournalUsable);
             Assert.NotNull(opened.Catalog);
             Assert.Empty(await journal.GetInterruptedAsync());
         }
@@ -77,6 +79,7 @@ public sealed class LibraryStartupTests
                 new ProjectOperationLock(Path.Combine(root, "locks")));
 
             Assert.False(opened.RecoveryLimited);
+            Assert.True(opened.JournalUsable);
             var saved = Assert.Single(await opened.Catalog.GetProjectsAsync());
             Assert.Equal(project.ProjectId, saved.ProjectId);
             Assert.Equal("keep-me", saved.Repository);
@@ -99,12 +102,46 @@ public sealed class LibraryStartupTests
                 new ProjectOperationLock(Path.Combine(root, "locks")));
 
             Assert.True(opened.RecoveryLimited);
+            Assert.True(opened.JournalUsable);
             Assert.NotNull(opened.Catalog);
             Assert.NotNull(opened.Importer);
-            Assert.Contains("کتابخانه باز است", opened.StatusMessage(0));
-            Assert.Contains("عملیات حساس تا رفع مشکل محدود است", opened.StatusMessage(0));
-            Assert.Contains("simulated interrupted-operation read failure", opened.RecoveryError);
+            var status = opened.StatusMessage(0);
+            Assert.Contains("کتابخانه باز است", status);
+            Assert.Contains("عملیات حساس تا رفع مشکل محدود است", status);
+            Assert.DoesNotContain("simulated interrupted-operation read failure", status);
+            Assert.DoesNotContain(root, status);
+            var log = File.ReadAllText(DiagnosticLog.FilePath(DiagnosticLog.DirectoryFor(root)));
+            Assert.Contains("simulated interrupted-operation read failure", log);
             Assert.NotEmpty(await opened.Catalog.GetCategoriesAsync());
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
+    public async Task Open_CorruptJournalFile_OpensCatalog_DoesNotLeakExceptionToUi()
+    {
+        var root = NewRoot();
+        try
+        {
+            var journalPath = Path.Combine(root, "operations.sqlite3");
+            await File.WriteAllTextAsync(journalPath, "CORRUPT-NOT-SQLITE-" + new string('X', 1024));
+            var journal = new ProjectOperationJournal(journalPath);
+            var opened = await LibraryStartup.OpenAsync(root, journal, new GitProcess(),
+                new ProjectOperationLock(Path.Combine(root, "locks")));
+
+            Assert.True(opened.RecoveryLimited);
+            Assert.False(opened.JournalUsable);
+            Assert.NotNull(opened.Catalog);
+            Assert.NotEmpty(await opened.Catalog.GetCategoriesAsync());
+            var status = opened.StatusMessage(0);
+            Assert.Contains("دفتر ثبت عملیات قابل استفاده نیست", status);
+            Assert.DoesNotContain("SQLite", status, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("file is not a database", status, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(journalPath, status);
+            Assert.DoesNotContain("Exception", status, StringComparison.OrdinalIgnoreCase);
+            var log = File.ReadAllText(DiagnosticLog.FilePath(DiagnosticLog.DirectoryFor(root)));
+            Assert.Contains("journal is not usable", log);
+            Assert.Contains("SQLite", log, StringComparison.OrdinalIgnoreCase);
         }
         finally { DeleteRoot(root); }
     }

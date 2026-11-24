@@ -7,9 +7,11 @@ Merge policy: Draft PR into WP-2.4 only. No merge to `main`. Prior work-package 
 ## Implemented
 
 - `ProjectOperationJournal` creates `project_operations` before `GetInterruptedAsync`, `GetAsync`, and `SetStateAsync` (Begin already did).
-- `LibraryStartup` assigns the catalog even when recovery throws. Sensitive journal-backed commands stay limited; Clone does not.
-- Clone CanExecute: library open + non-empty GitHub URL, with Persian `CloneDisabledReason` in the UI.
-- Tests: fresh journal, empty SQLite, upgrade without data loss, recovery-does-not-block-catalog, Clone gate, scripted Clone registration, real public repository clone.
+- `LibraryStartup` assigns the catalog even when recovery throws. Sensitive journal-backed commands stay limited.
+- Clone CanExecute: library open + journal usable + non-empty GitHub URL, with Persian `CloneDisabledReason`. A corrupt journal keeps the library open but blocks Clone before `git clone`, staging, destination, or catalog insert.
+- Recovery/journal exceptions are written to `00_Manager/logs/git-manager.log`. The status line is Persian and does not include raw exception text or paths.
+- Tests: fresh journal, empty SQLite, upgrade without data loss, recovery-does-not-block-catalog, corrupt SQLite file, Clone gate, scripted Clone registration, real public repository clone, GCM/credential boundary unit tests.
+- GCM private-repo review: [WP-2.5.1-GCM-PRIVATE-REPOS.md](decisions/WP-2.5.1-GCM-PRIVATE-REPOS.md). Not an interactive private clone.
 
 ## Release validation
 

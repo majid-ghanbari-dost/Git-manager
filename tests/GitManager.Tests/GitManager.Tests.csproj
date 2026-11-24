@@ -21,5 +21,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="../../installer/GitManager.iss" CopyToOutputDirectory="PreserveNewest" Link="installer/GitManager.iss" />
+    <None Include="../../src/GitManager.App/Services/GitProcess.cs" CopyToOutputDirectory="PreserveNewest" Link="source/GitProcess.cs" />
   </ItemGroup>
 </Project>

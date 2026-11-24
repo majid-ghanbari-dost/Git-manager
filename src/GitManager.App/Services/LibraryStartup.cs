@@ -11,7 +11,7 @@ public sealed record LibraryStartupResult(
     LifecycleMoveRecoveryReport LifecycleRecovery,
     RecoveryReport OperationRecovery,
     bool RecoveryLimited,
-    string? RecoveryError)
+    bool JournalUsable)
 {
     public int AttentionCount =>
         RenameRecovery.RequiresAttention + CategoryMoveRecovery.RequiresAttention
@@ -23,11 +23,10 @@ public sealed record LibraryStartupResult(
 
     public string StatusMessage(int missingCount)
     {
+        if (!JournalUsable)
+            return "کتابخانه باز است، اما دفتر ثبت عملیات قابل استفاده نیست. عملیات حساس و دریافت مخزن تا رفع مشکل محدود است.";
         if (RecoveryLimited)
-        {
-            var extra = string.IsNullOrWhiteSpace(RecoveryError) ? "" : " " + RecoveryError;
-            return "کتابخانه باز است، اما بازیابی عملیات ناقص انجام نشد. عملیات حساس تا رفع مشکل محدود است." + extra;
-        }
+            return "کتابخانه باز است، اما بازیابی عملیات ناقص انجام نشد. عملیات حساس تا رفع مشکل محدود است.";
 
         return AttentionCount > 0
             ? $"کتابخانه آماده است؛ {AttentionCount} عملیات برای بررسی دستی علامت‌گذاری شد" +
@@ -41,8 +40,8 @@ public sealed record LibraryStartupResult(
 }
 
 /// <summary>
-/// Opens a workspace catalog even when journal recovery fails. Clone stays available;
-/// journal-backed mutations stay limited until recovery succeeds.
+/// Opens a workspace catalog even when journal recovery fails. Clone is allowed only when
+/// the journal can record an operation; otherwise the library still opens and Clone stays blocked.
 /// </summary>
 public static class LibraryStartup
 {
@@ -54,6 +53,7 @@ public static class LibraryStartup
         CancellationToken cancellationToken = default)
     {
         git ??= new GitProcess();
+        var logDirectory = DiagnosticLog.DirectoryFor(workspacePath);
         var workspace = new WorkspaceService();
         workspace.Initialize(workspacePath);
         var catalog = new ProjectCatalog(workspacePath);
@@ -66,66 +66,74 @@ public static class LibraryStartup
         var importer = new RepositoryImportService(workspace, catalog, git, journal, operationLock);
 
         var recoveryLimited = false;
-        string? recoveryError = null;
+        var journalUsable = false;
         var rename = new CategoryRenameRecoveryReport(0, 0, 0);
         var categoryMove = new CategoryMoveRecoveryReport(0, 0, 0);
         var lifecycleMove = new LifecycleMoveRecoveryReport(0, 0, 0);
         var operations = new RecoveryReport(0, 0, 0);
 
-        void MarkLimited(Exception ex)
+        void MarkLimited(string category, string message, Exception ex)
         {
             recoveryLimited = true;
-            recoveryError = string.IsNullOrWhiteSpace(recoveryError)
-                ? ex.Message
-                : recoveryError + " | " + ex.Message;
+            DiagnosticLog.Write(logDirectory, category, message, ex);
         }
 
-        async Task<T> TryRecoverAsync<T>(Func<Task<T>> action, T fallback)
+        async Task<T> TryRecoverAsync<T>(string step, Func<Task<T>> action, T fallback)
         {
             try { return await action(); }
             catch (Exception ex)
             {
-                MarkLimited(ex);
+                MarkLimited("recovery", step + " failed", ex);
                 return fallback;
             }
         }
 
         try
         {
-            await journal.InitializeAsync(cancellationToken);
+            await journal.EnsureAvailableAsync(cancellationToken);
+            journalUsable = true;
         }
         catch (Exception ex)
         {
-            MarkLimited(ex);
+            journalUsable = false;
+            MarkLimited("journal", "operation journal is not usable", ex);
         }
 
-        rename = await TryRecoverAsync(
-            () => new CategoryRenameRecoveryService(workspacePath, catalog, journal, operationLock)
-                .RecoverAsync(cancellationToken),
-            rename);
-        categoryMove = await TryRecoverAsync(
-            () => new CategoryMoveRecoveryService(workspacePath, catalog, journal, operationLock)
-                .RecoverAsync(cancellationToken),
-            categoryMove);
-        lifecycleMove = await TryRecoverAsync(
-            () => new LifecycleMoveRecoveryService(workspacePath, catalog, journal, operationLock)
-                .RecoverAsync(cancellationToken),
-            lifecycleMove);
-        operations = await TryRecoverAsync(
-            () => new ProjectOperationRecoveryService(journal, operationLock).RecoverAsync(cancellationToken),
-            operations);
+        if (journalUsable)
+        {
+            rename = await TryRecoverAsync(
+                "category-rename recovery",
+                () => new CategoryRenameRecoveryService(workspacePath, catalog, journal, operationLock)
+                    .RecoverAsync(cancellationToken),
+                rename);
+            categoryMove = await TryRecoverAsync(
+                "category-move recovery",
+                () => new CategoryMoveRecoveryService(workspacePath, catalog, journal, operationLock)
+                    .RecoverAsync(cancellationToken),
+                categoryMove);
+            lifecycleMove = await TryRecoverAsync(
+                "lifecycle recovery",
+                () => new LifecycleMoveRecoveryService(workspacePath, catalog, journal, operationLock)
+                    .RecoverAsync(cancellationToken),
+                lifecycleMove);
+            operations = await TryRecoverAsync(
+                "operation recovery",
+                () => new ProjectOperationRecoveryService(journal, operationLock).RecoverAsync(cancellationToken),
+                operations);
+        }
+
         try
         {
             await new ProjectAvailabilityService(workspacePath, catalog).ProbeAllAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            MarkLimited(ex);
+            MarkLimited("availability", "project availability probe failed", ex);
         }
 
         return new LibraryStartupResult(
             catalog, categoryManagement, mover, lifecycle, importer,
             rename, categoryMove, lifecycleMove, operations,
-            recoveryLimited, recoveryError);
+            recoveryLimited, journalUsable);
     }
 }

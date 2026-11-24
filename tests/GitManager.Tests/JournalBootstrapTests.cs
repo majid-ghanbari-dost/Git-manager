@@ -110,6 +110,37 @@ public sealed class JournalBootstrapTests
         finally { DeleteRoot(root); }
     }
 
+    [Fact]
+    public async Task CorruptSqliteFile_GetInterrupted_ThrowsJournalUnavailable()
+    {
+        var root = NewRoot();
+        try
+        {
+            var path = Path.Combine(root, "operations.sqlite3");
+            await File.WriteAllTextAsync(path, "CORRUPT-NOT-SQLITE-" + new string('X', 1024));
+            var journal = new ProjectOperationJournal(path);
+            var ex = await Assert.ThrowsAsync<JournalUnavailableException>(() => journal.GetInterruptedAsync());
+            Assert.Equal(JournalUnavailableException.UserMessage, ex.Message);
+            Assert.NotNull(ex.InnerException);
+            Assert.Contains("SQLite", ex.InnerException!.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
+    public async Task CorruptSqliteFile_EnsureAvailable_ThrowsJournalUnavailable()
+    {
+        var root = NewRoot();
+        try
+        {
+            var path = Path.Combine(root, "operations.sqlite3");
+            await File.WriteAllTextAsync(path, "CORRUPT-NOT-SQLITE-" + new string('X', 1024));
+            var journal = new ProjectOperationJournal(path);
+            await Assert.ThrowsAsync<JournalUnavailableException>(() => journal.EnsureAvailableAsync());
+        }
+        finally { DeleteRoot(root); }
+    }
+
     private static async Task<bool> TableExistsAsync(string databasePath, string table)
     {
         await using var connection = new SqliteConnection(
