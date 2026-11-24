@@ -1,5 +1,9 @@
 # WP-2.4 Windows runner install / upgrade / repair / uninstall smoke.
 # This is not a Product Owner clean-machine test.
+#
+# Child processes must not wait forever. PR CI 45399075128 lost the hosted
+# runner during this step ("lost communication with the server") because
+# WaitForExit had no timeout, so the job produced no smoke logs or artifacts.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$SetupExe,
@@ -14,7 +18,8 @@ function Invoke-LoggedProcess {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
         [Parameter(Mandatory = $true)][string]$Arguments,
-        [Parameter(Mandatory = $true)][string]$Name
+        [Parameter(Mandatory = $true)][string]$Name,
+        [int]$TimeoutSeconds = 90
     )
     if (-not (Test-Path -LiteralPath $FilePath)) {
         throw "$Name executable is missing: $FilePath"
@@ -23,10 +28,15 @@ function Invoke-LoggedProcess {
     $process.StartInfo.FileName = $FilePath
     $process.StartInfo.Arguments = $Arguments
     $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.CreateNoWindow = $true
     if (-not $process.Start()) {
         throw "$Name failed to start."
     }
-    $process.WaitForExit()
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        try { $process.Kill($true) } catch { }
+        try { [void]$process.WaitForExit(5000) } catch { }
+        throw "$Name timed out after ${TimeoutSeconds}s and was killed. Arguments: $Arguments"
+    }
     if ($process.ExitCode -ne 0) {
         throw "$Name exited with code $($process.ExitCode). Arguments: $Arguments"
     }

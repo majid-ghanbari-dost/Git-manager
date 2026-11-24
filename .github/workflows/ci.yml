@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -53,7 +54,6 @@ jobs:
           $sourceArchive = Join-Path $PWD "artifacts/GitManager-source.zip"
           $manifest = Join-Path $PWD "artifacts/SOURCE-MANIFEST-SHA256.txt"
           $handoff = Join-Path $PWD "artifacts/GitManager-WP-2.4-Handoff.zip"
-          $releaseHashes = Join-Path $PWD "artifacts/RELEASE-SHA256.txt"
 
           if (-not (Test-Path -LiteralPath (Join-Path $publishDir "GitManager.exe"))) {
             throw "Published GitManager.exe is missing."
@@ -86,15 +86,13 @@ jobs:
           Set-Content -LiteralPath $manifest -Value $manifestEntries -Encoding utf8
           Compress-Archive -Path @($sourceArchive, $manifest) -DestinationPath $handoff -CompressionLevel Optimal -Force
 
-          $hashLines = @()
           foreach ($file in @($setup, $portable, $handoff)) {
             $name = Split-Path $file -Leaf
             $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant()
             Set-Content -LiteralPath "$file.sha256" -Value "$hash  $name" -Encoding ascii
-            $hashLines += "$hash  $name"
           }
-          Set-Content -LiteralPath $releaseHashes -Value $hashLines -Encoding ascii
       - name: Installer install/upgrade/uninstall smoke
+        timeout-minutes: 12
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts/install-evidence | Out-Null
@@ -119,13 +117,18 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: git-manager-wp-2-4-release
+          name: git-manager-installer-x64
           path: |
             artifacts/GitManager-Setup-x64.exe
             artifacts/GitManager-Setup-x64.exe.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: git-manager-portable-x64
+          path: |
             artifacts/GitManager-win-x64-portable.zip
             artifacts/GitManager-win-x64-portable.zip.sha256
-            artifacts/RELEASE-SHA256.txt
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: success()
@@ -134,10 +137,4 @@ jobs:
           path: |
             artifacts/GitManager-WP-2.4-Handoff.zip
             artifacts/GitManager-WP-2.4-Handoff.zip.sha256
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: git-manager-win-x64
-          path: artifacts/GitManager-win-x64/
           if-no-files-found: error

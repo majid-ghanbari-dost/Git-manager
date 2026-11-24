@@ -48,6 +48,15 @@ Lifecycle is implemented on `work/wp-2-3-lifecycle-management`. It is not merged
 
 Windows CI run `45365248926` on `eb434a9` succeeded, including installer smoke. This is not a signed production release. It is not a Product Owner clean-machine installation test.
 
+## WP-2.5.1 on `work/wp-2-5-1-journal-clone-bootstrap`
+
+- Operation journal bootstraps `project_operations` before any read/write.
+- Recovery failure no longer leaves the catalog unset; the library opens and journal-backed mutations stay limited with a Persian status. Exception details stay in the technical log.
+- Clone enables when the library is open, the journal can record an operation, and a GitHub URL is present; an unusable journal (invalid file content or malformed SQLite pages) disables Clone with a Persian reason and does not create a partial project.
+- Tests cover fresh install, empty SQLite, invalid non-SQLite journal file content, malformed SQLite interior pages (header preserved), upgrade without data loss, scripted Clone registration, a real public GitHub clone, and credential-boundary checks. Private GCM clone is reviewed in docs, not executed in CI.
+
+This work is not merged to `main`. Review follow-up Windows CI run `45388706337` on `c90fff3` succeeded. Mid-Clone push CI `45399066199` on `f5ab0eb` succeeded; pull request CI `45399075128` failed when the hosted runner lost communication during installer smoke (unbounded `WaitForExit`). It is not a Product Owner clean-machine test.
+
 ## Not yet release-ready
 
 - Publish, diff review, secret scanning, and push confirmation are not implemented.

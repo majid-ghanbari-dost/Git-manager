@@ -10,11 +10,10 @@ namespace GitManager.App.ViewModels;
 
 public sealed class MainViewModel : INotifyPropertyChanged
 {
-    private readonly SettingsService _settings = new();
-    private readonly ProjectOperationJournal _operationJournal = new();
-    private readonly ProjectOperationRecoveryService _recovery;
-    private readonly WorkspaceService _workspace = new();
-    private readonly GitProcess _git = new();
+    private readonly SettingsService _settings;
+    private readonly ProjectOperationJournal _operationJournal;
+    private readonly GitProcess _git;
+    private readonly ProjectOperationLock? _operationLock;
     private readonly ProjectBackupService _backups;
     private readonly ProjectRestoreService _restores;
     private ProjectCatalog? _catalog;
@@ -22,6 +21,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private CategoryManagementService? _categoryManagement;
     private ProjectCategoryMoveService? _projectCategoryMover;
     private ProjectLifecycleService? _lifecycle;
+    private bool _sensitiveOperationsLimited;
+    private bool _journalUsable;
     private readonly List<ProjectRecord> _allProjects = [];
     private string _newCategoryName = "";
     private string _renameCategoryName = "";
@@ -37,7 +38,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<string> LifecycleFilters { get; } = ["همه", "فعال", "معلق", "بایگانی‌شده", "مفقود/ناسازگار"];
     public ObservableCollection<ProjectRecord> Projects { get; } = [];
     public string WorkspacePath { get => _workspacePath; private set { _workspacePath = value; OnPropertyChanged(); } }
-    public string RepositoryUrl { get => _repositoryUrl; set { _repositoryUrl = value; OnPropertyChanged(); CloneCommand.NotifyCanExecuteChanged(); } }
+    public string RepositoryUrl
+    {
+        get => _repositoryUrl;
+        set
+        {
+            _repositoryUrl = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CloneDisabledReason));
+            CloneCommand.NotifyCanExecuteChanged();
+        }
+    }
+    public string CloneDisabledReason =>
+        CloneCommandGate.DisabledReason(_catalog is not null, _journalUsable, RepositoryUrl);
     public string SelectedCategory
     {
         get => _selectedCategory;
@@ -99,28 +112,52 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public MainViewModel()
+    public MainViewModel() : this(new SettingsService(), new ProjectOperationJournal(), new GitProcess())
     {
-        _recovery = new ProjectOperationRecoveryService(_operationJournal);
+    }
+
+    internal MainViewModel(
+        SettingsService settings,
+        ProjectOperationJournal journal,
+        GitProcess git,
+        ProjectOperationLock? operationLock = null)
+    {
+        _settings = settings;
+        _operationJournal = journal;
+        _git = git;
+        _operationLock = operationLock;
         _backups = new ProjectBackupService(_git, _operationJournal);
         _restores = new ProjectRestoreService(_git, _backups);
         ChangeWorkspaceCommand = new RelayCommand(ChooseWorkspace);
-        CloneCommand = new AsyncRelayCommand(CloneAsync, () => _catalog is not null && !string.IsNullOrWhiteSpace(RepositoryUrl));
-        BackupCommand = new AsyncRelayCommand(BackupSelectedAsync, () => SelectedProject is not null);
-        RestoreCommand = new AsyncRelayCommand(RestoreBackupAsync);
+        CloneCommand = new AsyncRelayCommand(CloneAsync, CanClone);
+        BackupCommand = new AsyncRelayCommand(BackupSelectedAsync, () => CanRunSensitive() && SelectedProject is not null);
+        RestoreCommand = new AsyncRelayCommand(RestoreBackupAsync, CanRunSensitive);
         CreateCategoryCommand = new AsyncRelayCommand(CreateCategoryAsync, () => _categoryManagement is not null && !string.IsNullOrWhiteSpace(NewCategoryName));
-        RenameCategoryCommand = new AsyncRelayCommand(RenameCategoryAsync, () => _categoryManagement is not null && !string.IsNullOrWhiteSpace(SelectedCategory) && !string.IsNullOrWhiteSpace(RenameCategoryName));
+        RenameCategoryCommand = new AsyncRelayCommand(RenameCategoryAsync,
+            () => CanRunSensitive() && _categoryManagement is not null && !string.IsNullOrWhiteSpace(SelectedCategory) && !string.IsNullOrWhiteSpace(RenameCategoryName));
         DeleteCategoryCommand = new AsyncRelayCommand(DeleteCategoryAsync, () => _categoryManagement is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
         MoveProjectCommand = new AsyncRelayCommand(MoveSelectedProjectAsync,
-            () => _projectCategoryMover is not null && SelectedProject is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
+            () => CanRunSensitive() && _projectCategoryMover is not null && SelectedProject is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
         MoveCategoryUpCommand = new AsyncRelayCommand(() => ReorderCategoryAsync(-1), CanMoveCategoryUp);
         MoveCategoryDownCommand = new AsyncRelayCommand(() => ReorderCategoryAsync(1), CanMoveCategoryDown);
-        MoveToActiveCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Active), () => _lifecycle is not null && SelectedProject is not null);
-        MoveToOnHoldCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.OnHold), () => _lifecycle is not null && SelectedProject is not null);
-        ArchiveProjectCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Archived), () => _lifecycle is not null && SelectedProject is not null);
-        RestoreArchivedCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Active), () => _lifecycle is not null && SelectedProject is not null);
+        MoveToActiveCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Active),
+            () => CanRunSensitive() && _lifecycle is not null && SelectedProject is not null);
+        MoveToOnHoldCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.OnHold),
+            () => CanRunSensitive() && _lifecycle is not null && SelectedProject is not null);
+        ArchiveProjectCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Archived),
+            () => CanRunSensitive() && _lifecycle is not null && SelectedProject is not null);
+        RestoreArchivedCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Active),
+            () => CanRunSensitive() && _lifecycle is not null && SelectedProject is not null);
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
+
+    internal bool IsCatalogOpen => _catalog is not null;
+    internal bool SensitiveOperationsLimited => _sensitiveOperationsLimited;
+    internal bool JournalUsable => _journalUsable;
+    internal Task OpenWorkspaceAsync(string path) => SetWorkspaceAsync(path);
+
+    private bool CanClone() => CloneCommandGate.CanExecute(_catalog is not null, _journalUsable, RepositoryUrl);
+    private bool CanRunSensitive() => _catalog is not null && !_sensitiveOperationsLimited;
 
     public async Task InitializeAsync()
     {
@@ -142,38 +179,24 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         try
         {
-            _workspace.Initialize(path);
-            var catalog = new ProjectCatalog(path);
-            await catalog.InitializeAsync();
-            _categoryManagement = new CategoryManagementService(catalog,
-                new CategoryRenameService(path, catalog, _operationJournal));
-            _projectCategoryMover = new ProjectCategoryMoveService(path, catalog, _operationJournal);
-            _lifecycle = new ProjectLifecycleService(path, catalog, _operationJournal, _git);
+            var opened = await LibraryStartup.OpenAsync(path, _operationJournal, _git, _operationLock);
+            _categoryManagement = opened.CategoryManagement;
+            _projectCategoryMover = opened.ProjectCategoryMover;
+            _lifecycle = opened.Lifecycle;
+            _catalog = opened.Catalog;
+            _importer = opened.Importer;
+            _sensitiveOperationsLimited = opened.RecoveryLimited;
+            _journalUsable = opened.JournalUsable;
             await RefreshCategoriesAsync();
-            var renameRecovery = await new CategoryRenameRecoveryService(path, catalog, _operationJournal).RecoverAsync();
-            var categoryRecovery = await new CategoryMoveRecoveryService(path, catalog, _operationJournal).RecoverAsync();
-            var lifecycleRecovery = await new LifecycleMoveRecoveryService(path, catalog, _operationJournal).RecoverAsync();
-            var recovery = await _recovery.RecoverAsync();
-            await new ProjectAvailabilityService(path, catalog).ProbeAllAsync();
-            _catalog = catalog;
-            _importer = new RepositoryImportService(_workspace, catalog, _git, _operationJournal);
             WorkspacePath = Path.GetFullPath(path);
             await _settings.SaveWorkspaceAsync(WorkspacePath);
             await RefreshProjectsAsync();
-            var attention = renameRecovery.RequiresAttention + categoryRecovery.RequiresAttention
-                + lifecycleRecovery.RequiresAttention + recovery.RequiresAttention;
-            var rolled = renameRecovery.RolledBack + categoryRecovery.RolledBack
-                + lifecycleRecovery.RolledBack + recovery.RolledBack;
             var missing = _allProjects.Count(x => x.Availability is LifecycleState.Missing or LifecycleState.PathDrift);
-            StatusMessage = attention > 0
-                ? $"کتابخانه آماده است؛ {attention} عملیات برای بررسی دستی علامت‌گذاری شد" +
-                  (missing > 0 ? $" و {missing} پروژه مفقود یا ناسازگار است." : ".")
-                : rolled > 0
-                    ? $"کتابخانه آماده است؛ {rolled} عملیات ناقص به‌صورت امن بازگردانی شد."
-                    : missing > 0
-                        ? $"کتابخانه آماده است؛ {missing} پروژه مفقود یا ناسازگار است."
-                        : "کتابخانه آماده است. مخزن GitHub را برای افزودن وارد کنید.";
+            StatusMessage = opened.StatusMessage(missing);
+            OnPropertyChanged(nameof(CloneDisabledReason));
             CloneCommand.NotifyCanExecuteChanged();
+            BackupCommand.NotifyCanExecuteChanged();
+            RestoreCommand.NotifyCanExecuteChanged();
             CreateCategoryCommand.NotifyCanExecuteChanged();
             RenameCategoryCommand.NotifyCanExecuteChanged();
             DeleteCategoryCommand.NotifyCanExecuteChanged();
@@ -185,7 +208,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ArchiveProjectCommand.NotifyCanExecuteChanged();
             RestoreArchivedCommand.NotifyCanExecuteChanged();
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(path), "workspace", "library open failed", ex);
+            StatusMessage = "باز کردن کتابخانه انجام نشد. جزئیات در گزارش فنی ذخیره شد.";
+        }
     }
 
     private bool CanMoveCategoryUp()
@@ -299,7 +326,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
             await RefreshProjectsAsync();
             StatusMessage = $"پروژه {project.Owner}/{project.Repository} با موفقیت ثبت شد.";
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(WorkspacePath), "clone", "clone failed", ex);
+            StatusMessage = ex is InvalidOperationException
+                ? ex.Message
+                : "دریافت مخزن انجام نشد. جزئیات در گزارش فنی ذخیره شد.";
+        }
     }
 
     private async Task BackupSelectedAsync()
