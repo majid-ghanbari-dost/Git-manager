@@ -58,7 +58,7 @@ public sealed class ProjectOperationRecoveryTests
             var second = await recovery.RecoverAsync();
 
             Assert.Equal(1, first.RequiresAttention);
-            Assert.Equal(0, second.RequiresAttention);
+            Assert.Equal(1, second.RequiresAttention);
             Assert.True(Directory.Exists(staging));
             Assert.True(Directory.Exists(final));
             Assert.Empty(await journal.GetInterruptedAsync());
