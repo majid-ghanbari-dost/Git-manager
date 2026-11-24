@@ -13,6 +13,12 @@ Merge policy: Draft PR into WP-2.3 only. No merge to `main`. Prior work-package 
 - Windows CI: installer compile, portable ZIP, source handoff, SHA-256, install/repair/upgrade/uninstall smoke on a path with spaces and a non-English workspace folder.
 - Unit tests for smoke initialization and installer script user-data guards.
 
+## Release validation
+
+Windows CI run [45365248926](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45365248926) on `eb434a9901f29aa1cf6534105c106da1a431bd0d` succeeded: unit tests, self-contained publish, Inno Setup compile, portable ZIP, SHA-256, source handoff, and install/repair/upgrade/uninstall smoke (path with spaces, non-English workspace folder, sidecar + LocalAppData + workspace preserved). This is not a Product Owner clean-machine test and not a signed production release.
+
+Artifacts: `git-manager-wp-2-4-release` (`GitManager-Setup-x64.exe`, portable ZIP, checksums), `git-manager-wp-2-4-source-handoff`, `git-manager-wp-2-4-install-evidence`.
+
 ## Not claimed
 
 - Product Owner clean-machine installation.

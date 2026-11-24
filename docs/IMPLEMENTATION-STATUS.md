@@ -46,7 +46,7 @@ Lifecycle is implemented on `work/wp-2-3-lifecycle-management`. It is not merged
 - `--ci-smoke` headless launch; Windows CI smokes install, launch, repair, upgrade, and uninstall.
 - SHA-256 hashes for installer, portable ZIP, and source handoff.
 
-This is not a signed production release. It is not a Product Owner clean-machine installation test.
+Windows CI run `45365248926` on `eb434a9` succeeded, including installer smoke. This is not a signed production release. It is not a Product Owner clean-machine installation test.
 
 ## Not yet release-ready
 
