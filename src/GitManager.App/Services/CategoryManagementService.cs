@@ -23,4 +23,8 @@ public sealed class CategoryManagementService(ProjectCatalog catalog, CategoryRe
 
     public Task DeleteAsync(string categoryId) =>
         catalog.DeleteEmptyCategoryAsync(categoryId);
+
+    public Task MoveUpAsync(string categoryId) => catalog.ReorderCategoryAsync(categoryId, -1);
+
+    public Task MoveDownAsync(string categoryId) => catalog.ReorderCategoryAsync(categoryId, 1);
 }
