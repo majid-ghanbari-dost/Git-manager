@@ -36,9 +36,20 @@ public sealed class CategoryMoveRecoveryService(
             var destinationExists = Directory.Exists(destination);
             if (sourceExists && !destinationExists)
             {
-                await journal.SetStateAsync(operation.OperationId, "RolledBack",
-                    "انتقال پیش از جابه‌جایی پوشه متوقف شده بود؛ مبدأ حفظ شد.", cancellationToken);
-                rolledBack++;
+                var sourceProject = projects.FirstOrDefault(x => x.ProjectId == operation.ProjectId);
+                if (sourceProject is not null && Path.GetFullPath(sourceProject.ContainerPath)
+                    .Equals(source, StringComparison.OrdinalIgnoreCase))
+                {
+                    await journal.SetStateAsync(operation.OperationId, "RolledBack",
+                        "انتقال پیش از جابه‌جایی پوشه متوقف شده بود؛ مبدأ و کاتالوگ حفظ شدند.", cancellationToken);
+                    rolledBack++;
+                }
+                else
+                {
+                    await journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                        "پوشه مبدأ وجود دارد اما مسیر ثبت‌شده در کاتالوگ با آن سازگار نیست؛ هیچ تغییری اعمال نشد.", cancellationToken);
+                    attention++;
+                }
                 continue;
             }
 
@@ -87,14 +98,6 @@ public sealed class CategoryMoveRecoveryService(
         return new CategoryMoveRecoveryReport(rolledBack, completed, attention);
     }
 
-    private bool CategoryMoveUnsafe(string path)
-    {
-        var parent = Path.GetDirectoryName(path);
-        if (CategoryMoveProjectMoveServicePlaceholder(path)) return true;
-        if (parent is null || !Directory.Exists(parent)) return false;
-        return ProjectCategoryMoveService.ContainsReparsePoint(parent);
-    }
-
-    private static bool CategoryMoveProjectMoveServicePlaceholder(string path) =>
-        Directory.Exists(path) && ProjectCategoryMoveService.ContainsReparsePoint(path);
+    private static bool CategoryMoveUnsafe(string path) =>
+        ProjectCategoryMoveService.ContainsReparsePoint(path);
 }
