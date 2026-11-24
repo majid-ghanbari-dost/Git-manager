@@ -49,26 +49,28 @@ public sealed class ProjectOperationRecoveryService
 
             if (!stagingExists)
             {
-                await journal.SetStateAsync(operation.OperationId, "RolledBack",
+                await _journal.SetStateAsync(operation.OperationId, "RolledBack",
                     "پس از راه‌اندازی مجدد، مسیر staging و مقصد نهایی وجود نداشتند.", cancellationToken);
                 alreadyMissing++;
                 continue;
             }
 
-            if (!IsSafeStagingPath(operation))
+            if (!IsSafeStagingPath(operation) || ContainsReparsePoint(operation.StagingPath))
             {
-                await journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
-                    "مسیر staging با الگوی امن عملیات مطابقت ندارد؛ حذف خودکار ممنوع شد.", cancellationToken);
+                await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                    "مسیر staging با الگوی امن مطابقت ندارد یا شامل Reparse Point است؛ حذف خودکار ممنوع شد.", cancellationToken);
                 requiresAttention++;
                 continue;
             }
 
-            if (Directory.Exists(operation.StagingPath))
-                Directory.Delete(operation.StagingPath, recursive: true);
-            else
-                File.Delete(operation.StagingPath);
+            try
+            {
+                if (Directory.Exists(operation.StagingPath))
+                    Directory.Delete(operation.StagingPath, recursive: true);
+                else
+                    File.Delete(operation.StagingPath);
 
-            await journal.SetStateAsync(operation.OperationId, "RolledBack",
+                await _journal.SetStateAsync(operation.OperationId, "RolledBack",
                     "داده‌های staging ناقص پس از بررسی مسیر امن پاک‌سازی شدند؛ پروژهٔ اصلی دست‌نخورده ماند.", cancellationToken);
                 rolledBack++;
             }
@@ -102,5 +104,47 @@ public sealed class ProjectOperationRecoveryService
                 && Path.GetFileName(Path.GetDirectoryName(staging)) == "temp",
             _ => false
         };
+    }
+
+    private static bool ContainsReparsePoint(string path)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var current = fullPath;
+            while (!string.IsNullOrEmpty(current))
+            {
+                if (Directory.Exists(current) || File.Exists(current))
+                {
+                    if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                        return true;
+                }
+                current = Path.GetDirectoryName(current);
+            }
+
+            if (Directory.Exists(fullPath))
+            {
+                var pending = new Stack<string>();
+                pending.Push(fullPath);
+                while (pending.Count > 0)
+                {
+                    foreach (var entry in Directory.EnumerateFileSystemEntries(pending.Pop()))
+                    {
+                        var attributes = File.GetAttributes(entry);
+                        if ((attributes & FileAttributes.ReparsePoint) != 0)
+                            return true;
+                        if ((attributes & FileAttributes.Directory) != 0)
+                            pending.Push(entry);
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            // If the tree cannot be inspected completely, fail closed.
+            return true;
+        }
     }
 }
