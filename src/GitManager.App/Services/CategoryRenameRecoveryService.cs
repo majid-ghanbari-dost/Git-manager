@@ -80,7 +80,9 @@ public sealed class CategoryRenameRecoveryService(
                     var oldPath = Path.GetFullPath(_workspace.GetProjectContainer(
                         _workspaceRoot, project.Lifecycle, oldName, project.Owner, project.Repository));
                     return Path.GetFullPath(project.ContainerPath).Equals(expected, StringComparison.OrdinalIgnoreCase)
-                        && Directory.Exists(expected) && !Directory.Exists(oldPath);
+                        && Directory.Exists(expected) && !Directory.Exists(oldPath)
+                        && !ProjectCategoryMoveService.ContainsReparsePoint(expected)
+                        && !ProjectCategoryMoveService.ContainsReparsePoint(oldPath);
                 });
                 if (allCommitted)
                 {
@@ -121,7 +123,8 @@ public sealed class CategoryRenameRecoveryService(
                     Directory.Exists(newPath) && !Directory.Exists(oldPath) &&
                     PathSafety.IsWithin(_workspaceRoot, oldPath) &&
                     PathSafety.IsWithin(_workspaceRoot, newPath) &&
-                    !ProjectCategoryMoveService.ContainsReparsePoint(newPath))
+                    !ProjectCategoryMoveService.ContainsReparsePoint(newPath) &&
+                    !ProjectCategoryMoveService.ContainsReparsePoint(oldPath))
                 {
                     rollbackPlan.Add((project, oldPath, newPath, true));
                     continue;
