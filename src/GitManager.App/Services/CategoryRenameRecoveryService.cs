@@ -129,6 +129,17 @@ public sealed class CategoryRenameRecoveryService(
                     rollbackPlan.Add((project, oldPath, newPath, true));
                     continue;
                 }
+                if (currentPath.Equals(oldPath, StringComparison.OrdinalIgnoreCase) &&
+                    !Directory.Exists(oldPath) && Directory.Exists(newPath) &&
+                    PathSafety.IsWithin(_workspaceRoot, oldPath) &&
+                    PathSafety.IsWithin(_workspaceRoot, newPath) &&
+                    !ProjectCategoryMoveService.ContainsReparsePoint(newPath) &&
+                    !ProjectCategoryMoveService.ContainsReparsePoint(oldPath))
+                {
+                    // The process may have crashed after Directory.Move but before the catalog commit.
+                    rollbackPlan.Add((project, oldPath, newPath, true));
+                    continue;
+                }
                 if (currentPath.Equals(newPath, StringComparison.OrdinalIgnoreCase) &&
                     !Directory.Exists(newPath) && Directory.Exists(oldPath) &&
                     PathSafety.IsWithin(_workspaceRoot, oldPath) &&
