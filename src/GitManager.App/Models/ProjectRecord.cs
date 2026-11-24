@@ -7,6 +7,7 @@ public sealed class ProjectRecord
     public string Host { get; set; } = "github.com";
     public string Owner { get; set; } = "";
     public string Repository { get; set; } = "";
+    public string CategoryId { get; set; } = "";
     public string Category { get; set; } = "Unclassified";
     public string Lifecycle { get; set; } = "Active";
     public string ContainerPath { get; set; } = "";
