@@ -14,8 +14,7 @@
 - [x] Category CRUD, project moves, populated-category rename, and ordering (WP-2.2)
 - [x] Lifecycle management: Active / On-Hold / Archived physical moves, history, recovery (WP-2.3; not merged)
 - [x] Recovery journal and interrupted-operation recovery (WP-2.1; Windows CI passed on the work branch)
-- [x] CI build and unit tests passing on WP-2.1 and WP-2.2 work branches (not on `main`)
-- [ ] WP-2.3 Windows CI on `work/wp-2-3-lifecycle-management` (pending this branch)
+- [x] CI build and unit tests passing on WP-2.1, WP-2.2, and WP-2.3 work branches (not on `main`)
 
 ## Phase 2 — Repository acquisition
 - [x] GitHub URL validation and canonical identity

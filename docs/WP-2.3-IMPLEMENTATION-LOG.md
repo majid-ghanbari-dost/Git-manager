@@ -16,8 +16,11 @@ Merge policy: Draft PR into WP-2.2 only. No merge to `main`. PRs #1–#3 untouch
 - `RecoveryRequired` is intermediate and does not block a later `Completed`.
 - Persian UI filter, search, availability, archive/restore actions.
 - Automated tests for the transition matrix, recovery windows, and event consistency.
-- Local `dotnet` is not available in this sandbox; Windows CI on `work/**` is the compile/test evidence.
 - A same-lifecycle retry completes a leftover `CommitPending` journal row via recovery.
+
+## Release validation
+
+Windows CI run [45361673077](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45361673077) on `f2ca734` succeeded: build, unit tests, portable win-x64 publish, WP-2.3 source handoff, and both artifact uploads. This is not installer or production readiness.
 
 ## Known limitations
 

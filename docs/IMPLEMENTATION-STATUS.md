@@ -35,7 +35,7 @@
 - Persian UI: filter, search, archive/unarchive with confirmation, availability column.
 - Idempotent catalog migration to schema 2.3 (blank lifecycle → Active; unknown non-empty values preserved).
 
-Lifecycle is implemented on this branch only. It is not merged to `main`. Unit tests plus Windows CI do **not** mean installer or production readiness.
+Lifecycle is implemented on this branch only. It is not merged to `main`. Windows CI run `45361673077` on `f2ca734` succeeded. Unit tests plus Windows CI do **not** mean installer or production readiness.
 
 ## Not yet release-ready
 
