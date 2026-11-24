@@ -175,6 +175,7 @@ public sealed class CategoryManagementTests
             var catalog = new ProjectCatalog(root);
             await catalog.InitializeAsync();
             var categories = await catalog.GetCategoriesAsync();
+            Assert.Equal("Unclassified", categories[0].Name);
             var legacyCategory = Assert.Single(categories, x => x.Name == "Legacy Custom");
             var project = Assert.Single(await catalog.GetProjectsAsync());
 
