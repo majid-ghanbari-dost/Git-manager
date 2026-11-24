@@ -251,7 +251,7 @@ public sealed class ProjectCatalog
         bool isSystem;
         await using (var reader = await lookup.ExecuteReaderAsync())
         {
-            if (!await reader.Read()) throw new InvalidOperationException("دسته‌بندی پیدا نشد.");
+            if (!await reader.ReadAsync()) throw new InvalidOperationException("دسته‌بندی پیدا نشد.");
             name = reader.GetString(0);
             isSystem = reader.GetInt64(1) != 0;
         }
