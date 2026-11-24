@@ -330,6 +330,40 @@ public sealed class ProjectCatalog
         project.CategoryId = categoryId;
     }
 
+    public async Task UpdateProjectCategoryAndPathAsync(
+        string projectId, string categoryId, string categoryName,
+        string containerPath, string repositoryPath)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+
+        var categoryCheck = connection.CreateCommand();
+        categoryCheck.Transaction = transaction;
+        categoryCheck.CommandText = "SELECT name FROM categories WHERE category_id = $id";
+        categoryCheck.Parameters.AddWithValue("$id", categoryId);
+        var actualName = await categoryCheck.ExecuteScalarAsync() as string;
+        if (actualName is null || !actualName.Equals(categoryName, StringComparison.Ordinal))
+            throw new InvalidOperationException("دسته‌بندی مقصد در کاتالوگ وجود ندارد یا تغییر کرده است.");
+
+        var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = """
+            UPDATE projects
+            SET category_id = $categoryId, category = $category,
+                container_path = $container, repository_path = $repository
+            WHERE project_id = $projectId
+            """;
+        update.Parameters.AddWithValue("$categoryId", categoryId);
+        update.Parameters.AddWithValue("$category", categoryName);
+        update.Parameters.AddWithValue("$container", containerPath);
+        update.Parameters.AddWithValue("$repository", repositoryPath);
+        update.Parameters.AddWithValue("$projectId", projectId);
+        if (await update.ExecuteNonQueryAsync() != 1)
+            throw new InvalidOperationException("پروژه برای به‌روزرسانی پیدا نشد.");
+        transaction.Commit();
+    }
+
     private static string ValidateCategoryName(string name)
     {
         var normalized = (name ?? "").Trim();
