@@ -84,6 +84,34 @@ public sealed class ProjectCatalog
             await assign.ExecuteNonQueryAsync();
         }
 
+        // Preserve custom legacy category names that may not be in the default seed set.
+        var orphaned = connection.CreateCommand();
+        orphaned.Transaction = transaction;
+        orphaned.CommandText = """
+            SELECT DISTINCT p.category
+            FROM projects p
+            WHERE p.category IS NOT NULL AND TRIM(p.category) <> ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM categories c WHERE c.name = p.category COLLATE NOCASE
+              )
+            """;
+        var orphanedNames = new List<string>();
+        await using (var reader = await orphaned.ExecuteReaderAsync())
+            while (await reader.ReadAsync()) orphanedNames.Add(reader.GetString(0));
+        foreach (var name in orphanedNames)
+        {
+            var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO categories(category_id, name, created_at_utc, is_system, sort_order)
+                VALUES ($id, $name, $date, 0, 999)
+                """;
+            insert.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("N"));
+            insert.Parameters.AddWithValue("$name", name);
+            insert.Parameters.AddWithValue("$date", DateTime.UtcNow.ToString("O"));
+            await insert.ExecuteNonQueryAsync();
+        }
+
         var backfill = connection.CreateCommand();
         backfill.Transaction = transaction;
         backfill.CommandText = """
@@ -100,6 +128,7 @@ public sealed class ProjectCatalog
         index.Transaction = transaction;
         index.CommandText = """
             CREATE UNIQUE INDEX IF NOT EXISTS ux_categories_category_id ON categories(category_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_categories_name_nocase ON categories(name COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS ix_projects_category_id ON projects(category_id);
             """;
         await index.ExecuteNonQueryAsync();
