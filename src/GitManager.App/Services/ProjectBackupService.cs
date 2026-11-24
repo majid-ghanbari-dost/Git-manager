@@ -32,7 +32,7 @@ public sealed class ProjectBackupService
         var backupId = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
         var staging = Path.Combine(backupRoot, ".staging-" + Guid.NewGuid().ToString("N"));
         var final = Path.Combine(backupRoot, backupId);
-        var operation = await _journal.BeginAsync("Backup", project.ProjectId, project.ProjectId, staging, final, cancellationToken);
+        var operation = await _journal.BeginAsync("Backup", "project:" + project.ProjectId, project.ProjectId, staging, final, cancellationToken);
 
         try
         {
