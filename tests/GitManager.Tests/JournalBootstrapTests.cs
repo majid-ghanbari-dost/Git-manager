@@ -110,6 +110,7 @@ public sealed class JournalBootstrapTests
         finally { DeleteRoot(root); }
     }
 
+    // Invalid file content (not a SQLite database). This is not interior page corruption.
     [Fact]
     public async Task CorruptSqliteFile_GetInterrupted_ThrowsJournalUnavailable()
     {
@@ -127,6 +128,7 @@ public sealed class JournalBootstrapTests
         finally { DeleteRoot(root); }
     }
 
+    // Invalid file content (not a SQLite database). This is not interior page corruption.
     [Fact]
     public async Task CorruptSqliteFile_EnsureAvailable_ThrowsJournalUnavailable()
     {
@@ -137,6 +139,29 @@ public sealed class JournalBootstrapTests
             await File.WriteAllTextAsync(path, "CORRUPT-NOT-SQLITE-" + new string('X', 1024));
             var journal = new ProjectOperationJournal(path);
             await Assert.ThrowsAsync<JournalUnavailableException>(() => journal.EnsureAvailableAsync());
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
+    public async Task MalformedSqlitePages_EnsureAvailable_ThrowsJournalUnavailable()
+    {
+        var root = NewRoot();
+        try
+        {
+            var path = Path.Combine(root, "operations.sqlite3");
+            var journal = new ProjectOperationJournal(path);
+            var staging = Path.Combine(root, "staging");
+            var final = Path.Combine(root, "final");
+            Directory.CreateDirectory(staging);
+            await journal.BeginAsync("Import", "import:malformed-pages", "project-malformed", staging, final);
+            await SqliteJournalFile.CheckpointAsync(path);
+            SqliteJournalFile.ScrambleInteriorPagesPreservingHeader(path);
+            Assert.Equal("SQLite format 3", SqliteJournalFile.ReadHeaderMagic(path));
+
+            var ex = await Assert.ThrowsAsync<JournalUnavailableException>(() => journal.EnsureAvailableAsync());
+            Assert.Equal(JournalUnavailableException.UserMessage, ex.Message);
+            await Assert.ThrowsAsync<JournalUnavailableException>(() => journal.GetInterruptedAsync());
         }
         finally { DeleteRoot(root); }
     }

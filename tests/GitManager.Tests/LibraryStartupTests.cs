@@ -117,6 +117,7 @@ public sealed class LibraryStartupTests
         finally { DeleteRoot(root); }
     }
 
+    // Invalid file content (not a SQLite database). This is not interior page corruption.
     [Fact]
     public async Task Open_CorruptJournalFile_OpensCatalog_DoesNotLeakExceptionToUi()
     {

@@ -72,6 +72,7 @@ public sealed class RepositoryImportTests
         finally { DeleteRoot(root); }
     }
 
+    // Invalid file content (not a SQLite database). This is not interior page corruption.
     [Fact]
     public async Task Clone_CorruptJournal_DoesNotCreatePartialProject()
     {
@@ -80,6 +81,40 @@ public sealed class RepositoryImportTests
         {
             var journalPath = Path.Combine(root, "operations.sqlite3");
             await File.WriteAllTextAsync(journalPath, "CORRUPT-NOT-SQLITE-" + new string('X', 1024));
+            var git = new ScriptedGitProcess("https://github.com/octocat/Hello-World.git");
+            var opened = await LibraryStartup.OpenAsync(
+                root,
+                new ProjectOperationJournal(journalPath),
+                git,
+                new ProjectOperationLock(Path.Combine(root, "locks")));
+            Assert.False(opened.JournalUsable);
+
+            var destination = new WorkspaceService().GetProjectContainer(
+                root, "Active", "Unclassified", "octocat", "Hello-World");
+            var ex = await Assert.ThrowsAsync<JournalUnavailableException>(
+                () => opened.Importer.CloneAsync(root, PublicCloneUrl, "Unclassified"));
+            Assert.Equal(JournalUnavailableException.UserMessage, ex.Message);
+            Assert.Empty(await opened.Catalog.GetProjectsAsync());
+            Assert.False(Directory.Exists(destination));
+            Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(root, "00_Manager", "temp")));
+            Assert.False(git.CloneWasInvoked);
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
+    public async Task Clone_MalformedSqlitePages_DoesNotCreatePartialProject()
+    {
+        var root = NewRoot();
+        try
+        {
+            var journalPath = Path.Combine(root, "operations.sqlite3");
+            var journal = new ProjectOperationJournal(journalPath);
+            await journal.InitializeAsync();
+            await SqliteJournalFile.CheckpointAsync(journalPath);
+            SqliteJournalFile.ScrambleInteriorPagesPreservingHeader(journalPath);
+            Assert.Equal("SQLite format 3", SqliteJournalFile.ReadHeaderMagic(journalPath));
+
             var git = new ScriptedGitProcess("https://github.com/octocat/Hello-World.git");
             var opened = await LibraryStartup.OpenAsync(
                 root,
@@ -200,7 +235,7 @@ public sealed class RepositoryImportTests
             string operationId, string state, string? error = null, CancellationToken cancellationToken = default)
         {
             if (state == corruptOnState)
-                await File.WriteAllTextAsync(path, "CORRUPT-NOT-SQLITE-" + new string('X', 1024), cancellationToken);
+                await File.WriteAllTextAsync(path, "CORRUPT-NOT-SQLITE-" + new string('X', 1024), cancellationToken); // not interior SQLite page corruption
             await base.SetStateAsync(operationId, state, error, cancellationToken);
         }
     }
