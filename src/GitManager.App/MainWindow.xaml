@@ -52,13 +52,13 @@
                         <Button DockPanel.Dock="Left" Content="ایجاد" Command="{Binding CreateCategoryCommand}" Padding="12,5"/>
                         <TextBox Text="{Binding NewCategoryName, UpdateSourceTrigger=PropertyChanged}" Padding="7" FlowDirection="RightToLeft"/>
                     </DockPanel>
-                    <TextBlock Text="تغییر نام دسته خالی" Foreground="#526273"/>
+                    <TextBlock Text="تغییر نام دسته‌بندی انتخاب‌شده" Foreground="#526273"/>
                     <DockPanel Margin="0,4,0,8">
                         <Button DockPanel.Dock="Left" Content="تغییر نام" Command="{Binding RenameCategoryCommand}" Padding="10,5"/>
                         <TextBox Text="{Binding RenameCategoryName, UpdateSourceTrigger=PropertyChanged}" Padding="7"/>
                     </DockPanel>
                     <Button Content="حذف دسته خالی انتخاب‌شده" Command="{Binding DeleteCategoryCommand}" HorizontalAlignment="Stretch" Margin="0,0,0,10"/>
-                    <TextBlock Text="حذف یا تغییر نام دسته دارای پروژه فعلاً مسدود است تا انتقال فیزیکی و بازیابی امن آن تکمیل شود. هیچ پروژه‌ای خودکار حذف نمی‌شود." TextWrapping="Wrap" Foreground="#9A5B20" FontSize="11" Margin="4,0,4,0"/>
+                    <TextBlock Text="تغییر نام دسته دارای پروژه، همه پوشه‌های پروژه را با ثبت Journal و امکان بازیابی منتقل می‌کند. حذف دسته دارای پروژه مجاز نیست؛ ابتدا پروژه‌ها را جداگانه منتقل کنید." TextWrapping="Wrap" Foreground="#9A5B20" FontSize="11" Margin="4,0,4,0"/>
                     <TextBlock Text="مخزن فقط دریافت می‌شود؛ هیچ اسکریپت یا کد پروژه‌ای به‌صورت خودکار اجرا نخواهد شد." TextWrapping="Wrap" Foreground="#788797" FontSize="12" Margin="4,10,4,0"/>
                 </StackPanel>
             </Border>
