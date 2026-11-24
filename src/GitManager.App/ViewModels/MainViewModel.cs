@@ -222,6 +222,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             if (category is null) throw new InvalidOperationException("دسته‌بندی انتخاب‌شده پیدا نشد.");
             await _categoryManagement.RenameAsync(category.CategoryId, RenameCategoryName);
             await RefreshCategoriesAsync();
+            await RefreshProjectsAsync();
             SelectedCategory = RenameCategoryName.Trim();
             RenameCategoryName = "";
             StatusMessage = "نام دسته‌بندی تغییر کرد.";
