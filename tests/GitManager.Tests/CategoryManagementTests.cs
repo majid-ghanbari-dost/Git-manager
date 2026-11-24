@@ -108,6 +108,60 @@ public sealed class CategoryManagementTests
         finally { DeleteRoot(root); }
     }
 
+    [Fact]
+    public async Task Initialize_MigratesLegacyCatalogWithoutLosingProjectsOrCustomCategories()
+    {
+        var root = NewRoot();
+        try
+        {
+            var databasePath = Path.Combine(root, "00_Manager", "catalog", "projects.sqlite3");
+            Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+            await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString()))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = """
+                    CREATE TABLE categories(name TEXT PRIMARY KEY, created_at_utc TEXT NOT NULL);
+                    CREATE TABLE projects(
+                        project_id TEXT PRIMARY KEY, canonical_remote_url TEXT NOT NULL UNIQUE,
+                        host TEXT NOT NULL, owner TEXT NOT NULL, repository TEXT NOT NULL,
+                        category TEXT NOT NULL, lifecycle TEXT NOT NULL, container_path TEXT NOT NULL,
+                        repository_path TEXT NOT NULL, current_branch TEXT NOT NULL,
+                        current_commit TEXT NOT NULL, imported_at_utc TEXT NOT NULL
+                    );
+                    INSERT INTO categories(name, created_at_utc) VALUES
+                        ('Unclassified', '2026-01-01T00:00:00.0000000Z'),
+                        ('Legacy Custom', '2026-01-01T00:00:00.0000000Z');
+                    INSERT INTO projects VALUES(
+                        'legacy-project', 'https://github.com/legacy/repo.git', 'github.com',
+                        'legacy', 'repo', 'Legacy Custom', 'Active',
+                        'C:/workspace/01_Active/Legacy Custom/legacy/repo',
+                        'C:/workspace/01_Active/Legacy Custom/legacy/repo/repository',
+                        'main', 'abc123', '2026-01-01T00:00:00.0000000Z'
+                    );
+                    """;
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var catalog = new ProjectCatalog(root);
+            await catalog.InitializeAsync();
+            var categories = await catalog.GetCategoriesAsync();
+            var legacyCategory = Assert.Single(categories, x => x.Name == "Legacy Custom");
+            var project = Assert.Single(await catalog.GetProjectsAsync());
+
+            Assert.False(string.IsNullOrWhiteSpace(legacyCategory.CategoryId));
+            Assert.Equal("legacy-project", project.ProjectId);
+            Assert.Equal(legacyCategory.CategoryId, project.CategoryId);
+            Assert.Equal("Legacy Custom", project.Category);
+
+            await catalog.InitializeAsync();
+            Assert.Equal(legacyCategory.CategoryId,
+                Assert.Single(await catalog.GetCategoriesAsync(), x => x.Name == "Legacy Custom").CategoryId);
+        }
+        finally { DeleteRoot(root); }
+    }
+
     private static string NewRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "GitManagerCategoryTests", Guid.NewGuid().ToString("N"));
