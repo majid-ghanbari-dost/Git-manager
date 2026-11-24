@@ -4,9 +4,7 @@ namespace GitManager.App.Services;
 
 public sealed class SettingsService
 {
-    private readonly string _settingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "GitManager", "settings.json");
+    private readonly string _settingsPath = AppLocalState.SettingsPath;
 
     public async Task<string?> LoadWorkspaceAsync()
     {

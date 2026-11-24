@@ -20,9 +20,7 @@ public class ProjectOperationJournal
 
     public ProjectOperationJournal(string? databasePath = null)
     {
-        databasePath ??= Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "GitManager", "operations.sqlite3");
+        databasePath ??= AppLocalState.JournalPath;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
         _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
     }

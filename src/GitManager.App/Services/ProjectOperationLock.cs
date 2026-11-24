@@ -11,9 +11,7 @@ public sealed class ProjectOperationLock
 
     public ProjectOperationLock(string? lockDirectory = null)
     {
-        _lockDirectory = lockDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "GitManager", "operation-locks");
+        _lockDirectory = lockDirectory ?? AppLocalState.LockDirectory;
         Directory.CreateDirectory(_lockDirectory);
     }
 

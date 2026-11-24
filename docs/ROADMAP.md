@@ -13,8 +13,9 @@
 - [x] Initial project inventory and selection
 - [x] Category CRUD, project moves, populated-category rename, and ordering (WP-2.2)
 - [x] Lifecycle management: Active / On-Hold / Archived physical moves, history, recovery (WP-2.3; not merged)
+- [x] Windows installer, uninstaller, portable ZIP, and SHA-256 (WP-2.4; Windows runner smoke, not merged)
 - [x] Recovery journal and interrupted-operation recovery (WP-2.1; Windows CI passed on the work branch)
-- [x] CI build and unit tests passing on WP-2.1, WP-2.2, and WP-2.3 work branches (not on `main`)
+- [x] CI build and unit tests passing on WP-2.1, WP-2.2, WP-2.3, and WP-2.4 work branches (not on `main`)
 
 ## Phase 2 — Repository acquisition
 - [x] GitHub URL validation and canonical identity
@@ -42,7 +43,8 @@
 ## Phase 5 — Quality and release
 - [x] Windows CI build and portable self-contained publish workflow
 - [ ] Expanded integration and UI tests
-- [ ] Windows clean-machine smoke test
-- [ ] Installer and uninstaller
-- [ ] Release notes, checksums, and signed artifacts where feasible
+- [ ] Windows clean-machine smoke test (Product Owner)
+- [x] Installer and uninstaller (WP-2.4 work-branch CI smoke; not signed)
+- [x] SHA-256 checksums for installer, portable ZIP, and source handoff
+- [ ] Release notes and signed artifacts
 - [x] Source archive, manifest, and SHA-256 handoff on work-branch CI (not a `main` release)

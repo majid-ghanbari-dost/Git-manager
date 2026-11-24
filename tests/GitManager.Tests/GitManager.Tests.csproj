@@ -18,4 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/GitManager.App/GitManager.App.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../installer/GitManager.iss" CopyToOutputDirectory="PreserveNewest" Link="installer/GitManager.iss" />
+  </ItemGroup>
 </Project>
