@@ -6,7 +6,7 @@ A Windows desktop application for organizing, cloning, backing up, restoring, an
 
 ## Current implementation
 
-The Windows desktop foundation is being developed on `work/phase-1-foundation`. It includes a Persian RTL WPF shell, configurable workspace, SQLite inventory, safe staged full-history clone, verified Git-bundle plus working-tree backup, and restore into a new isolated folder. Publishing, lifecycle/category management, submodule/LFS fidelity, and installer packaging remain incomplete; do not treat this branch as a production release.
+The Windows desktop foundation is being developed on `work/phase-1-foundation`. WP-2.1 adds the recovery journal and operation locking. WP-2.2 is in progress on `work/wp-2-2-category-management`: it introduces stable category IDs, an idempotent SQLite catalog migration, safe empty-category CRUD, and Persian UI controls. Moving projects between categories and renaming non-empty categories remain gated until the filesystem transaction and crash-recovery path is complete. Publishing, lifecycle management, submodule/LFS fidelity, and installer packaging remain incomplete; do not treat this branch as a production release.
 
 See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work and limitations.
 
