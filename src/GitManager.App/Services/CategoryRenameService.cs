@@ -67,7 +67,19 @@ public sealed class CategoryRenameService(
             }
 
             var rollbackErrors = new List<string>();
-            foreach (var projectId in movedProjectIds.AsEnumerable().Reverse())
+            var currentProjects = (await catalog.GetProjectsAsync())
+                .Where(x => x.CategoryId == categoryId).ToList();
+            var rollbackCandidates = new HashSet<string>(movedProjectIds, StringComparer.Ordinal);
+            foreach (var project in currentProjects)
+            {
+                var expectedNewPath = Path.GetFullPath(_workspace.GetProjectContainer(
+                    _workspaceRoot, project.Lifecycle, normalized, project.Owner, project.Repository));
+                if (project.Category.Equals(normalized, StringComparison.Ordinal) ||
+                    Path.GetFullPath(project.ContainerPath).Equals(expectedNewPath, StringComparison.OrdinalIgnoreCase))
+                    rollbackCandidates.Add(project.ProjectId);
+            }
+
+            foreach (var projectId in rollbackCandidates.Reverse())
             {
                 try
                 {
@@ -76,15 +88,29 @@ public sealed class CategoryRenameService(
                 catch (Exception rollbackError) { rollbackErrors.Add(rollbackError.Message); }
             }
 
-            if (rollbackErrors.Count == 0)
+            var refreshedProjects = (await catalog.GetProjectsAsync())
+                .Where(x => x.CategoryId == categoryId).ToList();
+            var allAtOldPaths = refreshedProjects.All(project =>
+            {
+                var oldPath = Path.GetFullPath(_workspace.GetProjectContainer(
+                    _workspaceRoot, project.Lifecycle, category.Name, project.Owner, project.Repository));
+                var newPath = Path.GetFullPath(_workspace.GetProjectContainer(
+                    _workspaceRoot, project.Lifecycle, normalized, project.Owner, project.Repository));
+                return Path.GetFullPath(project.ContainerPath).Equals(oldPath, StringComparison.OrdinalIgnoreCase)
+                    && Directory.Exists(oldPath) && !Directory.Exists(newPath);
+            });
+
+            if (rollbackErrors.Count == 0 && allAtOldPaths)
                 await journal.SetStateAsync(operation.OperationId, "RolledBack", ex.Message, CancellationToken.None);
             else
                 await journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
-                    $"{ex.Message} | بازگردانی برخی پروژه‌ها ناموفق بود: {string.Join(" | ", rollbackErrors)}",
+                    $"{ex.Message} | بازگردانی کامل نشد: {string.Join(" | ", rollbackErrors)}",
                     CancellationToken.None);
             throw;
         }
     }
+
+    private readonly WorkspaceService _workspace = new();
 
     internal static string BuildOperationKey(string categoryId, string oldName, string newName) =>
         $"category-rename|{categoryId}|{Uri.EscapeDataString(oldName)}|{Uri.EscapeDataString(newName)}";
