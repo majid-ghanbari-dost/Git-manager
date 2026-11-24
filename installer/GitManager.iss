@@ -1,6 +1,6 @@
 ; Git Manager — Inno Setup 6 script (WP-2.4)
 ; User workspace, SQLite catalog, backups, notes, journal, and settings live
-; outside {app} and must never be listed in [UninstallDelete] or [InstallDelete].
+; outside {app}. Do not add UninstallDelete or InstallDelete sections.
 
 #ifndef MyAppVersion
   #define MyAppVersion "2.4.0"

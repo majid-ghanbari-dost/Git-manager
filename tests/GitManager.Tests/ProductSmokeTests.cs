@@ -38,8 +38,9 @@ public sealed class ProductSmokeTests
         Assert.Contains("{autoprograms}", iss, StringComparison.Ordinal);
         Assert.Contains("{autodesktop}", iss, StringComparison.Ordinal);
         Assert.Contains("UsePreviousAppDir=yes", iss, StringComparison.Ordinal);
-        Assert.DoesNotContain("[UninstallDelete]", iss, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("[InstallDelete]", iss, StringComparison.OrdinalIgnoreCase);
+        var normalized = iss.Replace("\r\n", "\n");
+        Assert.DoesNotContain("\n[UninstallDelete]", normalized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\n[InstallDelete]", normalized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("settings.json", iss, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("projects.sqlite3", iss, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("operations.sqlite3", iss, StringComparison.OrdinalIgnoreCase);

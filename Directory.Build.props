@@ -1,5 +1,5 @@
 <Project>
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'GitManager.App'">
     <Version>2.4.0</Version>
     <Product>Git Manager</Product>
     <AssemblyTitle>Git Manager</AssemblyTitle>
