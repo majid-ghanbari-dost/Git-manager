@@ -18,6 +18,8 @@ jobs:
         run: dotnet restore src/GitManager.App/GitManager.App.csproj
       - name: Build
         run: dotnet build src/GitManager.App/GitManager.App.csproj --configuration Release --no-restore
+      - name: Run unit tests
+        run: dotnet test tests/GitManager.Tests/GitManager.Tests.csproj --configuration Release
       - name: Publish portable folder
         run: dotnet publish src/GitManager.App/GitManager.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output artifacts/GitManager-win-x64
       - uses: actions/upload-artifact@v4

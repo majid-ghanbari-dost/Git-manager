@@ -4,21 +4,24 @@
 - [x] Define central workspace and per-project isolation
 - [x] Separate project category from lifecycle
 - [x] Define import, backup, restore, and publish safety rules
-- [ ] Confirm supported Windows baseline and UI framework
+- [x] Select .NET 10 LTS, WPF/MVVM, SQLite, and Git CLI
 
 ## Phase 1 — Foundation
-- [ ] Application shell and Persian RTL interface
-- [ ] First-run workspace setup and validation
-- [ ] SQLite catalog and migrations
-- [ ] Category and lifecycle management
-- [ ] Project inventory and search
+- [x] Application shell and Persian RTL interface
+- [x] First-run workspace setup and validation
+- [x] SQLite catalog and initial schema
+- [x] Initial categories and project inventory
+- [ ] Category CRUD and lifecycle management
+- [ ] Recovery journal and interrupted-operation recovery
+- [ ] CI build and unit tests passing
 
 ## Phase 2 — Repository acquisition
-- [ ] GitHub URL validation and canonical identity
-- [ ] Authentication through Git Credential Manager
-- [ ] Permission and repository metadata check
-- [ ] Transactional clone through staging
-- [ ] Duplicate detection and safe re-import
+- [x] GitHub URL validation and canonical identity
+- [x] Authentication through configured Git credential helper
+- [x] Staged full-history clone and remote verification
+- [x] Duplicate detection and no-overwrite destination handling
+- [ ] Permission and repository metadata preview
+- [ ] Explicit retry/resume workflow for interrupted clones
 
 ## Phase 3 — Preservation
 - [ ] Full-history Git bundle backup

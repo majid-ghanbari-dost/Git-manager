@@ -19,8 +19,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string _selectedCategory = "Unclassified";
     private string _statusMessage = "برای شروع، محل کتابخانه را انتخاب کنید.";
 
-    public ObservableCollection<string> Categories { get; } =
-        new(["Unclassified", "Kandoo", "Business Tools", "Experiments", "Personal", "Client Work"]);
+    public ObservableCollection<string> Categories { get; } = new() { "Unclassified", "Kandoo", "Business Tools", "Experiments", "Personal", "Client Work" };
     public ObservableCollection<ProjectRecord> Projects { get; } = [];
     public string WorkspacePath { get => _workspacePath; private set { _workspacePath = value; OnPropertyChanged(); } }
     public string RepositoryUrl { get => _repositoryUrl; set { _repositoryUrl = value; OnPropertyChanged(); } }

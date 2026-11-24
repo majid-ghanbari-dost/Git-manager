@@ -41,6 +41,8 @@ public sealed class RepositoryImportService(
             };
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            Directory.CreateDirectory(Path.Combine(tempRoot, "backups"));
+            Directory.CreateDirectory(Path.Combine(tempRoot, "notes"));
             Directory.Move(tempRoot, destination);
             try { await catalog.AddProjectAsync(record); }
             catch
