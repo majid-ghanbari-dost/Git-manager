@@ -9,8 +9,8 @@
 ## Phase 1 — Foundation
 - [x] Application shell and Persian RTL interface
 - [x] First-run workspace setup and validation
-- [x] SQLite catalog and initial schema
-- [x] Initial categories and project inventory
+- [x] SQLite catalog and initial category seed
+- [x] Initial project inventory and selection
 - [ ] Category CRUD and lifecycle management
 - [ ] Recovery journal and interrupted-operation recovery
 - [ ] CI build and unit tests passing
@@ -24,10 +24,11 @@
 - [ ] Explicit retry/resume workflow for interrupted clones
 
 ## Phase 3 — Preservation
-- [ ] Full-history Git bundle backup
-- [ ] Working-tree snapshot for uncommitted/untracked files
-- [ ] Manifest and SHA-256 generation/verification
-- [ ] Backup retention and restore to a new location
+- [x] Full-history Git bundle backup
+- [x] Working-tree snapshot including tracked, untracked, and ignored files
+- [x] SHA-256 manifest and backup integrity verification
+- [ ] Restore into a new, empty destination
+- [ ] Recovery journal and interrupted-backup recovery
 - [ ] Explicit submodule and Git LFS coverage reporting
 
 ## Phase 4 — Safe publishing
@@ -38,9 +39,9 @@
 - [ ] No force push by default
 
 ## Phase 5 — Quality and release
-- [ ] Unit and integration tests
+- [x] Windows CI build and portable self-contained publish workflow
+- [ ] Expanded integration and UI tests
 - [ ] Windows clean-machine smoke test
-- [ ] CI build and test workflow
 - [ ] Installer and uninstaller
 - [ ] Release notes, checksums, and signed artifacts where feasible
 - [ ] Full source archive, manifest, and SHA-256 handoff
