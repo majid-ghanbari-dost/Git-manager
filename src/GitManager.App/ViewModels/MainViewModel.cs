@@ -12,12 +12,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly SettingsService _settings = new();
     private readonly WorkspaceService _workspace = new();
     private readonly GitProcess _git = new();
+    private readonly ProjectBackupService _backups;
     private ProjectCatalog? _catalog;
     private RepositoryImportService? _importer;
     private string _workspacePath = "";
     private string _repositoryUrl = "";
     private string _selectedCategory = "Unclassified";
     private string _statusMessage = "برای شروع، محل کتابخانه را انتخاب کنید.";
+    private ProjectRecord? _selectedProject;
 
     public ObservableCollection<string> Categories { get; } = new() { "Unclassified", "Kandoo", "Business Tools", "Experiments", "Personal", "Client Work" };
     public ObservableCollection<ProjectRecord> Projects { get; } = [];
@@ -26,16 +28,24 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string SelectedCategory { get => _selectedCategory; set { _selectedCategory = value; OnPropertyChanged(); } }
     public string StatusMessage { get => _statusMessage; private set { _statusMessage = value; OnPropertyChanged(); } }
     public int ProjectCount => Projects.Count;
+    public ProjectRecord? SelectedProject
+    {
+        get => _selectedProject;
+        set { _selectedProject = value; OnPropertyChanged(); BackupCommand.NotifyCanExecuteChanged(); }
+    }
 
     public RelayCommand ChangeWorkspaceCommand { get; }
     public AsyncRelayCommand CloneCommand { get; }
+    public AsyncRelayCommand BackupCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public MainViewModel()
     {
+        _backups = new ProjectBackupService(_git);
         ChangeWorkspaceCommand = new RelayCommand(ChooseWorkspace);
         CloneCommand = new AsyncRelayCommand(CloneAsync, () => _catalog is not null && !string.IsNullOrWhiteSpace(RepositoryUrl));
+        BackupCommand = new AsyncRelayCommand(BackupSelectedAsync, () => SelectedProject is not null);
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
 
@@ -75,7 +85,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private async Task CloneAsync()
     {
-        if (_importer is null || _catalog is null) return;
+        if (_importer is null) return;
         try
         {
             StatusMessage = "در حال بررسی دسترسی و دریافت کامل تاریخچه Git...";
@@ -85,6 +95,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
             StatusMessage = $"پروژه {project.Owner}/{project.Repository} با موفقیت ثبت شد.";
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
+    }
+
+    private async Task BackupSelectedAsync()
+    {
+        if (SelectedProject is null) return;
+        try
+        {
+            StatusMessage = $"در حال تهیه نسخه پشتیبان از {SelectedProject.Owner}/{SelectedProject.Repository}...";
+            var path = await _backups.CreateBackupAsync(SelectedProject);
+            var valid = await _backups.VerifyBackupAsync(path);
+            StatusMessage = valid
+                ? $"پشتیبان ایجاد و SHA-256 آن تأیید شد: {path}"
+                : "پشتیبان ساخته شد، اما بررسی صحت آن موفق نبود؛ آن را قابل اتکا تلقی نکنید.";
+        }
+        catch (Exception ex) { StatusMessage = $"تهیه پشتیبان ناموفق بود: {ex.Message}"; }
     }
 
     private async Task RefreshProjectsAsync()
