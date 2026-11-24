@@ -12,8 +12,13 @@ public sealed class ProjectCategoryMoveService(
     private readonly ProjectOperationLock _operationLock = operationLock ?? new ProjectOperationLock();
     private readonly WorkspaceService _workspace = new();
 
-    public async Task<string> MoveProjectAsync(
+    public Task<string> MoveProjectAsync(
         string projectId, string targetCategoryId,
+        CancellationToken cancellationToken = default) =>
+        MoveProjectAsync(projectId, targetCategoryId, null, cancellationToken);
+
+    public async Task<string> MoveProjectAsync(
+        string projectId, string targetCategoryId, string? targetCategoryName,
         CancellationToken cancellationToken = default)
     {
         var projects = await catalog.GetProjectsAsync();
@@ -22,11 +27,13 @@ public sealed class ProjectCategoryMoveService(
         var categories = await catalog.GetCategoriesAsync();
         var category = categories.FirstOrDefault(x => x.CategoryId == targetCategoryId)
             ?? throw new InvalidOperationException("دسته‌بندی مقصد وجود ندارد.");
-        if (project.CategoryId == category.CategoryId) return project.ContainerPath;
+        var destinationCategoryName = targetCategoryName ?? category.Name;
+        if (project.CategoryId == category.CategoryId &&
+            project.Category.Equals(destinationCategoryName, StringComparison.Ordinal)) return project.ContainerPath;
 
         var source = Path.GetFullPath(project.ContainerPath);
         var destination = Path.GetFullPath(_workspace.GetProjectContainer(
-            _workspaceRoot, project.Lifecycle, category.Name, project.Owner, project.Repository));
+            _workspaceRoot, project.Lifecycle, destinationCategoryName, project.Owner, project.Repository));
         if (!PathSafety.IsWithin(_workspaceRoot, source) || !PathSafety.IsWithin(_workspaceRoot, destination))
             throw new InvalidOperationException("مسیر مبدأ یا مقصد خارج از کتابخانه است.");
         if (!Directory.Exists(source))
@@ -36,7 +43,7 @@ public sealed class ProjectCategoryMoveService(
         if (ContainsReparsePoint(source))
             throw new IOException("پروژه یا یکی از والدهای آن شامل Reparse Point است؛ انتقال خودکار متوقف شد.");
 
-        var operationKey = BuildOperationKey(category.CategoryId, category.Name);
+        var operationKey = BuildOperationKey(category.CategoryId, destinationCategoryName);
         await using var lease = await _operationLock.AcquireAsync("project:" + project.ProjectId, cancellationToken);
         var operation = await journal.BeginAsync("CategoryMove", operationKey, project.ProjectId,
             source, destination, cancellationToken);
@@ -50,7 +57,7 @@ public sealed class ProjectCategoryMoveService(
             moved = true;
             var repositoryPath = Path.Combine(destination, Path.GetRelativePath(source, project.RepositoryPath));
             await catalog.UpdateProjectCategoryAndPathAsync(project.ProjectId, category.CategoryId,
-                category.Name, destination, repositoryPath);
+                destinationCategoryName, destination, repositoryPath, allowPendingCategoryRename: targetCategoryName is not null);
             catalogUpdated = true;
             await journal.SetStateAsync(operation.OperationId, "Completed", cancellationToken: cancellationToken);
             return destination;
