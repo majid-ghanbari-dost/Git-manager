@@ -365,6 +365,33 @@ public sealed class ProjectCatalog
         transaction.Commit();
     }
 
+    public async Task ReorderCategoryAsync(string categoryId, int direction)
+    {
+        if (direction is not (-1 or 1)) throw new ArgumentOutOfRangeException(nameof(direction));
+        var categories = await GetCategoriesAsync();
+        var index = categories.FindIndex(x => x.CategoryId == categoryId);
+        if (index < 0) throw new InvalidOperationException("دسته‌بندی پیدا نشد.");
+        var targetIndex = index + direction;
+        if (targetIndex < 0 || targetIndex >= categories.Count) return;
+        if (targetIndex == 0 || (index == 0 && categories[index].IsSystem))
+            throw new InvalidOperationException("دسته‌بندی Unclassified همیشه در ابتدای فهرست باقی می‌ماند.");
+
+        (categories[index], categories[targetIndex]) = (categories[targetIndex], categories[index]);
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        for (var order = 0; order < categories.Count; order++)
+        {
+            var update = connection.CreateCommand();
+            update.Transaction = transaction;
+            update.CommandText = "UPDATE categories SET sort_order = $order WHERE category_id = $id";
+            update.Parameters.AddWithValue("$order", order);
+            update.Parameters.AddWithValue("$id", categories[order].CategoryId);
+            await update.ExecuteNonQueryAsync();
+        }
+        transaction.Commit();
+    }
+
     public async Task RenameCategoryRecordAsync(string categoryId, string newName)
     {
         var normalized = ValidateCategoryName(newName);
