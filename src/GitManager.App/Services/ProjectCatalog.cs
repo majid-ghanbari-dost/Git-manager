@@ -466,6 +466,8 @@ public sealed class ProjectCatalog
             normalized.IndexOfAny(['<', '>', ':', '"', '/', '\\', '|', '?', '*']) >= 0 ||
             normalized is "." or "..")
             throw new ArgumentException("نام دسته‌بندی شامل نویسه غیرمجاز است.", nameof(name));
+        if (!PathSafety.SafeSegment(normalized).Equals(normalized, StringComparison.Ordinal))
+            throw new ArgumentException("نام دسته‌بندی با قواعد نام‌گذاری پوشه در ویندوز سازگار نیست.", nameof(name));
         return normalized;
     }
 }
