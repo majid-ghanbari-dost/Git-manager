@@ -6,7 +6,7 @@ A Windows desktop application for organizing, cloning, backing up, restoring, an
 
 ## Current implementation
 
-The Windows desktop foundation is being developed on `work/phase-1-foundation`. WP-2.1 adds the recovery journal and operation locking. WP-2.2 is in progress on `work/wp-2-2-category-management`: it introduces stable category IDs, an idempotent SQLite catalog migration, safe category CRUD, single-project moves, journaled batch rename for populated categories, persistent category ordering, and Persian UI controls. Final Windows CI passed with 34 unit tests, portable x64 publish, and a verified source handoff. The PR remains Draft pending Product Owner review. Publishing, lifecycle management, submodule/LFS fidelity, and installer packaging remain incomplete; do not treat this branch as a production release.
+Work is stacked on isolated branches and has not been merged into `main`. WP-2.2 delivered category CRUD and safe project moves. WP-2.3 on `work/wp-2-3-lifecycle-management` adds physical Active / On-Hold / Archived moves of the complete project container, append-only lifecycle history, crash recovery, Missing/PathDrift detection, and Persian filter/search/archive UI. Publishing, submodule/LFS fidelity, and installer packaging remain incomplete. Passing unit tests and Windows CI do not mean the product is ready to install.
 
 See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work and limitations.
 

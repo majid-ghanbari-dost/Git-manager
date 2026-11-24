@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using GitManager.App.Models;
 using GitManager.App.Services;
 using Microsoft.Win32;
@@ -20,15 +21,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private RepositoryImportService? _importer;
     private CategoryManagementService? _categoryManagement;
     private ProjectCategoryMoveService? _projectCategoryMover;
+    private ProjectLifecycleService? _lifecycle;
+    private readonly List<ProjectRecord> _allProjects = [];
     private string _newCategoryName = "";
     private string _renameCategoryName = "";
     private string _workspacePath = "";
     private string _repositoryUrl = "";
     private string _selectedCategory = "Unclassified";
     private string _statusMessage = "برای شروع، محل کتابخانه را انتخاب کنید.";
+    private string _searchText = "";
+    private string _selectedLifecycleFilter = "همه";
     private ProjectRecord? _selectedProject;
 
     public ObservableCollection<string> Categories { get; } = new() { "Unclassified", "Kandoo", "Business Tools", "Experiments", "Personal", "Client Work" };
+    public ObservableCollection<string> LifecycleFilters { get; } = ["همه", "فعال", "معلق", "بایگانی‌شده", "مفقود/ناسازگار"];
     public ObservableCollection<ProjectRecord> Projects { get; } = [];
     public string WorkspacePath { get => _workspacePath; private set { _workspacePath = value; OnPropertyChanged(); } }
     public string RepositoryUrl { get => _repositoryUrl; set { _repositoryUrl = value; OnPropertyChanged(); CloneCommand.NotifyCanExecuteChanged(); } }
@@ -59,7 +65,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             BackupCommand.NotifyCanExecuteChanged();
             MoveProjectCommand.NotifyCanExecuteChanged();
+            MoveToActiveCommand.NotifyCanExecuteChanged();
+            MoveToOnHoldCommand.NotifyCanExecuteChanged();
+            ArchiveProjectCommand.NotifyCanExecuteChanged();
+            RestoreArchivedCommand.NotifyCanExecuteChanged();
         }
+    }
+    public string SearchText
+    {
+        get => _searchText;
+        set { _searchText = value; OnPropertyChanged(); ApplyProjectFilter(); }
+    }
+    public string SelectedLifecycleFilter
+    {
+        get => _selectedLifecycleFilter;
+        set { _selectedLifecycleFilter = value; OnPropertyChanged(); ApplyProjectFilter(); }
     }
 
     public RelayCommand ChangeWorkspaceCommand { get; }
@@ -72,6 +92,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public AsyncRelayCommand MoveProjectCommand { get; }
     public AsyncRelayCommand MoveCategoryUpCommand { get; }
     public AsyncRelayCommand MoveCategoryDownCommand { get; }
+    public AsyncRelayCommand MoveToActiveCommand { get; }
+    public AsyncRelayCommand MoveToOnHoldCommand { get; }
+    public AsyncRelayCommand ArchiveProjectCommand { get; }
+    public AsyncRelayCommand RestoreArchivedCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -91,6 +115,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
             () => _projectCategoryMover is not null && SelectedProject is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
         MoveCategoryUpCommand = new AsyncRelayCommand(() => ReorderCategoryAsync(-1), CanMoveCategoryUp);
         MoveCategoryDownCommand = new AsyncRelayCommand(() => ReorderCategoryAsync(1), CanMoveCategoryDown);
+        MoveToActiveCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Active), () => _lifecycle is not null && SelectedProject is not null);
+        MoveToOnHoldCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.OnHold), () => _lifecycle is not null && SelectedProject is not null);
+        ArchiveProjectCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Archived), () => _lifecycle is not null && SelectedProject is not null);
+        RestoreArchivedCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Active), () => _lifecycle is not null && SelectedProject is not null);
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
 
@@ -120,20 +148,31 @@ public sealed class MainViewModel : INotifyPropertyChanged
             _categoryManagement = new CategoryManagementService(catalog,
                 new CategoryRenameService(path, catalog, _operationJournal));
             _projectCategoryMover = new ProjectCategoryMoveService(path, catalog, _operationJournal);
+            _lifecycle = new ProjectLifecycleService(path, catalog, _operationJournal, _git);
             await RefreshCategoriesAsync();
             var renameRecovery = await new CategoryRenameRecoveryService(path, catalog, _operationJournal).RecoverAsync();
             var categoryRecovery = await new CategoryMoveRecoveryService(path, catalog, _operationJournal).RecoverAsync();
+            var lifecycleRecovery = await new LifecycleMoveRecoveryService(path, catalog, _operationJournal).RecoverAsync();
             var recovery = await _recovery.RecoverAsync();
+            await new ProjectAvailabilityService(path, catalog).ProbeAllAsync();
             _catalog = catalog;
             _importer = new RepositoryImportService(_workspace, catalog, _git, _operationJournal);
             WorkspacePath = Path.GetFullPath(path);
             await _settings.SaveWorkspaceAsync(WorkspacePath);
             await RefreshProjectsAsync();
-            StatusMessage = renameRecovery.RequiresAttention + categoryRecovery.RequiresAttention + recovery.RequiresAttention > 0
-                ? $"کتابخانه آماده است؛ {renameRecovery.RequiresAttention + categoryRecovery.RequiresAttention + recovery.RequiresAttention} عملیات برای بررسی دستی علامت‌گذاری شد."
-                : renameRecovery.RolledBack + categoryRecovery.RolledBack + recovery.RolledBack > 0
-                    ? $"کتابخانه آماده است؛ {renameRecovery.RolledBack + categoryRecovery.RolledBack + recovery.RolledBack} عملیات ناقص به‌صورت امن بازگردانی شد."
-                    : "کتابخانه آماده است. مخزن GitHub را برای افزودن وارد کنید.";
+            var attention = renameRecovery.RequiresAttention + categoryRecovery.RequiresAttention
+                + lifecycleRecovery.RequiresAttention + recovery.RequiresAttention;
+            var rolled = renameRecovery.RolledBack + categoryRecovery.RolledBack
+                + lifecycleRecovery.RolledBack + recovery.RolledBack;
+            var missing = _allProjects.Count(x => x.Availability is LifecycleState.Missing or LifecycleState.PathDrift);
+            StatusMessage = attention > 0
+                ? $"کتابخانه آماده است؛ {attention} عملیات برای بررسی دستی علامت‌گذاری شد" +
+                  (missing > 0 ? $" و {missing} پروژه مفقود یا ناسازگار است." : ".")
+                : rolled > 0
+                    ? $"کتابخانه آماده است؛ {rolled} عملیات ناقص به‌صورت امن بازگردانی شد."
+                    : missing > 0
+                        ? $"کتابخانه آماده است؛ {missing} پروژه مفقود یا ناسازگار است."
+                        : "کتابخانه آماده است. مخزن GitHub را برای افزودن وارد کنید.";
             CloneCommand.NotifyCanExecuteChanged();
             CreateCategoryCommand.NotifyCanExecuteChanged();
             RenameCategoryCommand.NotifyCanExecuteChanged();
@@ -141,6 +180,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
             MoveProjectCommand.NotifyCanExecuteChanged();
             MoveCategoryUpCommand.NotifyCanExecuteChanged();
             MoveCategoryDownCommand.NotifyCanExecuteChanged();
+            MoveToActiveCommand.NotifyCanExecuteChanged();
+            MoveToOnHoldCommand.NotifyCanExecuteChanged();
+            ArchiveProjectCommand.NotifyCanExecuteChanged();
+            RestoreArchivedCommand.NotifyCanExecuteChanged();
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
     }
@@ -252,8 +295,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             StatusMessage = "در حال بررسی دسترسی و دریافت کامل تاریخچه Git...";
             var project = await _importer.CloneAsync(WorkspacePath, RepositoryUrl, SelectedCategory);
-            Projects.Add(project);
             RepositoryUrl = "";
+            await RefreshProjectsAsync();
             StatusMessage = $"پروژه {project.Owner}/{project.Repository} با موفقیت ثبت شد.";
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
@@ -289,11 +332,98 @@ public sealed class MainViewModel : INotifyPropertyChanged
         catch (Exception ex) { StatusMessage = $"بازیابی ناموفق بود: {ex.Message}"; }
     }
 
+    private async Task ChangeLifecycleAsync(string target)
+    {
+        if (_lifecycle is null || SelectedProject is null) return;
+        try
+        {
+            var project = SelectedProject;
+            var options = new LifecycleChangeOptions();
+            if (LifecycleState.RequiresArchiveConfirm(project.Lifecycle, target))
+            {
+                var extra = "";
+                try
+                {
+                    var inspect = await _lifecycle.InspectGitAsync(project.RepositoryPath, CancellationToken.None);
+                    if (inspect.Dirty)
+                        extra = "\nاین مخزن دارای تغییرات Commit‌نشده یا فایل ردیابی‌نشده است. بایگانی این تغییرات را حذف نمی‌کند.";
+                    options = options with { ConfirmDirtyWorkingTree = inspect.Dirty };
+                }
+                catch { }
+                if (!Confirm("بایگانی پروژه",
+                        $"پروژه {project.Owner}/{project.Repository} به پوشه 03_Archived منتقل می‌شود.\n" +
+                        "مخزن Git، تاریخچه، فایل‌های ذخیره‌نشده، پشتیبان‌ها و یادداشت‌ها حذف نمی‌شوند." + extra +
+                        "\nادامه می‌دهید؟"))
+                    return;
+                options = options with { ConfirmArchive = true, ConfirmDirtyWorkingTree = true };
+            }
+            else if (LifecycleState.RequiresRestoreConfirm(project.Lifecycle, target))
+            {
+                if (!Confirm("بازگردانی از بایگانی",
+                        $"پروژه {project.Owner}/{project.Repository} از بایگانی به {target} برمی‌گردد. مخزن حذف نمی‌شود. ادامه می‌دهید؟"))
+                    return;
+                options = options with { ConfirmRestoreFromArchive = true, ConfirmDirtyWorkingTree = true };
+            }
+            else
+            {
+                try
+                {
+                    var inspect = await _lifecycle.InspectGitAsync(project.RepositoryPath, CancellationToken.None);
+                    if (inspect.Dirty && !Confirm("تغییرات Commit‌نشده",
+                            "این مخزن دارای تغییرات Commit‌نشده است. انتقال وضعیت آن‌ها را حذف نمی‌کند. ادامه می‌دهید؟"))
+                        return;
+                    options = options with { ConfirmDirtyWorkingTree = true };
+                }
+                catch { options = options with { ConfirmDirtyWorkingTree = true }; }
+            }
+
+            await _lifecycle.ChangeLifecycleAsync(project.ProjectId, target, options);
+            await RefreshProjectsAsync();
+            StatusMessage = $"وضعیت پروژه به «{target}» تغییر کرد.";
+        }
+        catch (Exception ex) { StatusMessage = ex.Message; }
+    }
+
+    private static bool Confirm(string title, string text) =>
+        MessageBox.Show(text, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+
     private async Task RefreshProjectsAsync()
     {
         if (_catalog is null) return;
+        _allProjects.Clear();
+        _allProjects.AddRange(await _catalog.GetProjectsAsync());
+        ApplyProjectFilter();
+    }
+
+    private void ApplyProjectFilter()
+    {
+        var selectedId = SelectedProject?.ProjectId;
         Projects.Clear();
-        foreach (var project in await _catalog.GetProjectsAsync()) Projects.Add(project);
+        foreach (var project in _allProjects.Where(MatchesFilter))
+            Projects.Add(project);
+        SelectedProject = Projects.FirstOrDefault(x => x.ProjectId == selectedId) ?? Projects.FirstOrDefault();
+        OnPropertyChanged(nameof(ProjectCount));
+    }
+
+    private bool MatchesFilter(ProjectRecord project)
+    {
+        var filter = SelectedLifecycleFilter;
+        var ok = filter switch
+        {
+            "فعال" => project.Lifecycle == LifecycleState.Active,
+            "معلق" => project.Lifecycle == LifecycleState.OnHold,
+            "بایگانی‌شده" => project.Lifecycle == LifecycleState.Archived,
+            "مفقود/ناسازگار" => project.Availability is LifecycleState.Missing or LifecycleState.PathDrift,
+            _ => true
+        };
+        if (!ok) return false;
+        if (string.IsNullOrWhiteSpace(SearchText)) return true;
+        var q = SearchText.Trim();
+        return project.Repository.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || project.Owner.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || project.Category.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || project.CanonicalRemoteUrl.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || project.Lifecycle.Contains(q, StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>

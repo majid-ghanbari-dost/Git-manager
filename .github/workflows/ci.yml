@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, 'work/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'work/**']
   workflow_dispatch:
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $sourceArchive = Join-Path $PWD "artifacts/GitManager-source.zip"
           $manifest = Join-Path $PWD "artifacts/SOURCE-MANIFEST-SHA256.txt"
-          $handoff = Join-Path $PWD "artifacts/GitManager-WP-2.2-Handoff.zip"
+          $handoff = Join-Path $PWD "artifacts/GitManager-WP-2.3-Handoff.zip"
 
           git archive --format=zip --output="$sourceArchive" HEAD
           if ($LASTEXITCODE -ne 0) { throw "git archive failed" }
@@ -48,14 +48,14 @@ jobs:
           Compress-Archive -Path @($sourceArchive, $manifest) -DestinationPath $handoff -CompressionLevel Optimal -Force
 
           $handoffHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $handoff).Hash.ToLowerInvariant()
-          Set-Content -LiteralPath "$handoff.sha256" -Value "$handoffHash  GitManager-WP-2.2-Handoff.zip" -Encoding ascii
+          Set-Content -LiteralPath "$handoff.sha256" -Value "$handoffHash  GitManager-WP-2.3-Handoff.zip" -Encoding ascii
 
       - uses: actions/upload-artifact@v4
         with:
-          name: git-manager-wp-2-2-source-handoff
+          name: git-manager-wp-2-3-source-handoff
           path: |
-            artifacts/GitManager-WP-2.2-Handoff.zip
-            artifacts/GitManager-WP-2.2-Handoff.zip.sha256
+            artifacts/GitManager-WP-2.3-Handoff.zip
+            artifacts/GitManager-WP-2.3-Handoff.zip.sha256
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4

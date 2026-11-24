@@ -158,7 +158,83 @@ public sealed class ProjectCatalog
             END;
             """;
         await index.ExecuteNonQueryAsync();
+        await ApplyLifecycleSchemaAsync(connection, transaction);
         transaction.Commit();
+    }
+
+    private static async Task ApplyLifecycleSchemaAsync(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        await EnsureColumnAsync(connection, transaction, "projects", "availability", "TEXT NOT NULL DEFAULT 'Unknown'");
+        await EnsureColumnAsync(connection, transaction, "projects", "last_seen_at_utc", "TEXT");
+        await EnsureColumnAsync(connection, transaction, "projects", "last_backup_at_utc", "TEXT");
+        await EnsureColumnAsync(connection, transaction, "projects", "last_operation_status", "TEXT");
+        await EnsureColumnAsync(connection, transaction, "projects", "lifecycle_changed_at_utc", "TEXT");
+
+        var schema = connection.CreateCommand();
+        schema.Transaction = transaction;
+        schema.CommandText = """
+            CREATE TABLE IF NOT EXISTS app_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS project_lifecycle_events (
+                event_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE,
+                project_id TEXT NOT NULL,
+                from_lifecycle TEXT NOT NULL,
+                to_lifecycle TEXT NOT NULL,
+                operation_id TEXT,
+                result TEXT NOT NULL,
+                git_status_summary TEXT,
+                availability_at_start TEXT,
+                message TEXT,
+                created_at_utc TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_lifecycle_events_project
+                ON project_lifecycle_events(project_id, event_seq);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_lifecycle_events_operation_catalog_committed
+                ON project_lifecycle_events(operation_id)
+                WHERE result = 'CatalogCommitted' AND operation_id IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_lifecycle_events_operation_terminal
+                ON project_lifecycle_events(operation_id)
+                WHERE result IN ('Completed', 'RolledBack') AND operation_id IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_lifecycle_events_operation_recovery_required
+                ON project_lifecycle_events(operation_id)
+                WHERE result = 'RecoveryRequired' AND operation_id IS NOT NULL;
+            """;
+        await schema.ExecuteNonQueryAsync();
+
+        var normalize = connection.CreateCommand();
+        normalize.Transaction = transaction;
+        normalize.CommandText = "UPDATE projects SET lifecycle = 'Active' WHERE lifecycle IS NULL OR TRIM(lifecycle) = ''";
+        await normalize.ExecuteNonQueryAsync();
+
+        var triggers = connection.CreateCommand();
+        triggers.Transaction = transaction;
+        triggers.CommandText = """
+            CREATE TRIGGER IF NOT EXISTS trg_projects_lifecycle_insert
+            BEFORE INSERT ON projects
+            WHEN NEW.lifecycle NOT IN ('Active', 'On-Hold', 'Archived')
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid project lifecycle');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_projects_lifecycle_update
+            BEFORE UPDATE OF lifecycle ON projects
+            WHEN NEW.lifecycle NOT IN ('Active', 'On-Hold', 'Archived')
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid project lifecycle');
+            END;
+            """;
+        await triggers.ExecuteNonQueryAsync();
+
+        var version = connection.CreateCommand();
+        version.Transaction = transaction;
+        version.CommandText = """
+            INSERT OR IGNORE INTO app_meta(key, value) VALUES ('schema_version', '0');
+            UPDATE app_meta SET value = '2.3'
+            WHERE key = 'schema_version' AND value < '2.3';
+            """;
+        await version.ExecuteNonQueryAsync();
     }
 
     private static async Task EnsureColumnAsync(
@@ -305,23 +381,35 @@ public sealed class ProjectCatalog
         var command = connection.CreateCommand();
         command.CommandText = """
             SELECT project_id, canonical_remote_url, host, owner, repository, category_id, category,
-                   lifecycle, container_path, repository_path, current_branch, current_commit, imported_at_utc
+                   lifecycle, container_path, repository_path, current_branch, current_commit, imported_at_utc,
+                   availability, last_operation_status, last_seen_at_utc, last_backup_at_utc, lifecycle_changed_at_utc
             FROM projects ORDER BY repository COLLATE NOCASE
             """;
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-            result.Add(new ProjectRecord
-            {
-                ProjectId = reader.GetString(0), CanonicalRemoteUrl = reader.GetString(1),
-                Host = reader.GetString(2), Owner = reader.GetString(3), Repository = reader.GetString(4),
-                CategoryId = reader.IsDBNull(5) ? "" : reader.GetString(5), Category = reader.GetString(6),
-                Lifecycle = reader.GetString(7), ContainerPath = reader.GetString(8),
-                RepositoryPath = reader.GetString(9), CurrentBranch = reader.GetString(10),
-                CurrentCommit = reader.GetString(11),
-                ImportedAtUtc = DateTime.Parse(reader.GetString(12), null, System.Globalization.DateTimeStyles.RoundtripKind)
-            });
+            result.Add(ReadProject(reader));
         return result;
     }
+
+    private static ProjectRecord ReadProject(SqliteDataReader reader) => new()
+    {
+        ProjectId = reader.GetString(0), CanonicalRemoteUrl = reader.GetString(1),
+        Host = reader.GetString(2), Owner = reader.GetString(3), Repository = reader.GetString(4),
+        CategoryId = reader.IsDBNull(5) ? "" : reader.GetString(5), Category = reader.GetString(6),
+        Lifecycle = reader.GetString(7), ContainerPath = reader.GetString(8),
+        RepositoryPath = reader.GetString(9), CurrentBranch = reader.GetString(10),
+        CurrentCommit = reader.GetString(11),
+        ImportedAtUtc = DateTime.Parse(reader.GetString(12), null, System.Globalization.DateTimeStyles.RoundtripKind),
+        Availability = reader.IsDBNull(13) ? "Unknown" : reader.GetString(13),
+        LastOperationStatus = reader.IsDBNull(14) ? null : reader.GetString(14),
+        LastSeenAtUtc = ReadNullableDate(reader, 15),
+        LastBackupAtUtc = ReadNullableDate(reader, 16),
+        LifecycleChangedAtUtc = ReadNullableDate(reader, 17)
+    };
+
+    private static DateTime? ReadNullableDate(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null
+            : DateTime.Parse(reader.GetString(ordinal), null, System.Globalization.DateTimeStyles.RoundtripKind);
 
     public async Task AddProjectAsync(ProjectRecord project)
     {
@@ -393,6 +481,151 @@ public sealed class ProjectCatalog
         if (await update.ExecuteNonQueryAsync() != 1)
             throw new InvalidOperationException("پروژه برای به‌روزرسانی پیدا نشد.");
         transaction.Commit();
+    }
+
+    public async Task CommitLifecycleMoveAsync(
+        string projectId, string lifecycle, string containerPath, string repositoryPath,
+        LifecycleEventRecord catalogCommittedEvent)
+    {
+        if (!LifecycleState.IsKnown(lifecycle))
+            throw new InvalidOperationException($"وضعیت چرخه عمر «{lifecycle}» نامعتبر است.");
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = """
+            UPDATE projects
+            SET lifecycle = $lifecycle, container_path = $container, repository_path = $repository,
+                last_operation_status = $status, lifecycle_changed_at_utc = $changed,
+                availability = 'Available', last_seen_at_utc = $changed
+            WHERE project_id = $id
+            """;
+        update.Parameters.AddWithValue("$lifecycle", lifecycle);
+        update.Parameters.AddWithValue("$container", containerPath);
+        update.Parameters.AddWithValue("$repository", repositoryPath);
+        update.Parameters.AddWithValue("$status", "LifecycleMove:CatalogCommitted");
+        update.Parameters.AddWithValue("$changed", DateTime.UtcNow.ToString("O"));
+        update.Parameters.AddWithValue("$id", projectId);
+        if (await update.ExecuteNonQueryAsync() != 1)
+            throw new InvalidOperationException("پروژه برای به‌روزرسانی چرخه عمر پیدا نشد.");
+        await InsertEventCoreAsync(connection, transaction, catalogCommittedEvent);
+        transaction.Commit();
+    }
+
+    public async Task InsertLifecycleEventAsync(LifecycleEventRecord eventRecord)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        await InsertEventCoreAsync(connection, transaction, eventRecord);
+        transaction.Commit();
+    }
+
+    public async Task MarkLifecycleOperationCompletedAsync(string projectId, LifecycleEventRecord completedEvent)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        await InsertEventCoreAsync(connection, transaction, completedEvent);
+        var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = """
+            UPDATE projects SET last_operation_status = 'LifecycleMove:Completed'
+            WHERE project_id = $id
+            """;
+        update.Parameters.AddWithValue("$id", projectId);
+        await update.ExecuteNonQueryAsync();
+        transaction.Commit();
+    }
+
+    public async Task UpdateAvailabilityAsync(string projectId, string availability, DateTime? lastSeenUtc, string? status = null)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE projects
+            SET availability = $availability,
+                last_seen_at_utc = COALESCE($seen, last_seen_at_utc),
+                last_operation_status = COALESCE($status, last_operation_status)
+            WHERE project_id = $id
+            """;
+        command.Parameters.AddWithValue("$availability", availability);
+        command.Parameters.AddWithValue("$seen", (object?)lastSeenUtc?.ToString("O") ?? DBNull.Value);
+        command.Parameters.AddWithValue("$status", (object?)status ?? DBNull.Value);
+        command.Parameters.AddWithValue("$id", projectId);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task UpdateLastOperationStatusAsync(string projectId, string status)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = "UPDATE projects SET last_operation_status = $status WHERE project_id = $id";
+        command.Parameters.AddWithValue("$status", status);
+        command.Parameters.AddWithValue("$id", projectId);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task<List<LifecycleEventRecord>> GetLifecycleEventsAsync(string? projectId = null)
+    {
+        var result = new List<LifecycleEventRecord>();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT event_seq, event_id, project_id, from_lifecycle, to_lifecycle, operation_id, result,
+                   git_status_summary, availability_at_start, message, created_at_utc
+            FROM project_lifecycle_events
+            WHERE $project IS NULL OR project_id = $project
+            ORDER BY event_seq
+            """;
+        command.Parameters.AddWithValue("$project", (object?)projectId ?? DBNull.Value);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            result.Add(new LifecycleEventRecord(
+                reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                DateTime.Parse(reader.GetString(10), null, System.Globalization.DateTimeStyles.RoundtripKind)));
+        return result;
+    }
+
+    public async Task<string?> GetSchemaVersionAsync()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT value FROM app_meta WHERE key = 'schema_version'";
+        return await command.ExecuteScalarAsync() as string;
+    }
+
+    private static async Task InsertEventCoreAsync(
+        SqliteConnection connection, SqliteTransaction transaction, LifecycleEventRecord eventRecord)
+    {
+        var insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = """
+            INSERT OR IGNORE INTO project_lifecycle_events(
+                event_id, project_id, from_lifecycle, to_lifecycle, operation_id, result,
+                git_status_summary, availability_at_start, message, created_at_utc)
+            VALUES ($id, $project, $from, $to, $operation, $result, $git, $availability, $message, $created)
+            """;
+        insert.Parameters.AddWithValue("$id", eventRecord.EventId);
+        insert.Parameters.AddWithValue("$project", eventRecord.ProjectId);
+        insert.Parameters.AddWithValue("$from", eventRecord.FromLifecycle);
+        insert.Parameters.AddWithValue("$to", eventRecord.ToLifecycle);
+        insert.Parameters.AddWithValue("$operation", (object?)eventRecord.OperationId ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$result", eventRecord.Result);
+        insert.Parameters.AddWithValue("$git", (object?)eventRecord.GitStatusSummary ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$availability", (object?)eventRecord.AvailabilityAtStart ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$message", (object?)eventRecord.Message ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$created", eventRecord.CreatedAtUtc.ToString("O"));
+        await insert.ExecuteNonQueryAsync();
     }
 
     public async Task ReorderCategoryAsync(string categoryId, int direction)
