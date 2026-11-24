@@ -61,7 +61,9 @@ public sealed class ProjectOperationRecoveryTests
             Assert.Equal(1, second.RequiresAttention);
             Assert.True(Directory.Exists(staging));
             Assert.True(Directory.Exists(final));
-            Assert.Empty(await journal.GetInterruptedAsync());
+            var unresolved = await journal.GetInterruptedAsync();
+            var unresolvedOperation = Assert.Single(unresolved);
+            Assert.Equal("RecoveryRequired", unresolvedOperation.State);
         }
         finally
         {
