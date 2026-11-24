@@ -34,6 +34,10 @@ public sealed class CategoryRenameRecoveryService(
                 continue;
             }
 
+            if (!Path.GetFullPath(operation.StagingPath).Equals(_workspaceRoot, StringComparison.OrdinalIgnoreCase) ||
+                !Path.GetFullPath(operation.FinalPath).Equals(_workspaceRoot, StringComparison.OrdinalIgnoreCase))
+                continue; // The global journal may contain operations from a different workspace.
+
             var categoryId = parts[1];
             var oldName = Uri.UnescapeDataString(parts[2]);
             var newName = Uri.UnescapeDataString(parts[3]);
