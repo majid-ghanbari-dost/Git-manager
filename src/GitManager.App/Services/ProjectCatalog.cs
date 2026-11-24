@@ -124,6 +124,11 @@ public sealed class ProjectCatalog
             """;
         await backfill.ExecuteNonQueryAsync();
 
+        var pinSystemCategory = connection.CreateCommand();
+        pinSystemCategory.Transaction = transaction;
+        pinSystemCategory.CommandText = "UPDATE categories SET sort_order = -1 WHERE name = 'Unclassified' COLLATE NOCASE";
+        await pinSystemCategory.ExecuteNonQueryAsync();
+
         var index = connection.CreateCommand();
         index.Transaction = transaction;
         index.CommandText = """
