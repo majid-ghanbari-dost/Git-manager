@@ -48,7 +48,7 @@ public sealed class ProjectCategoryMoveService(
         if (ContainsReparsePoint(source))
             throw new IOException("پروژه یا یکی از والدهای آن شامل Reparse Point است؛ انتقال خودکار متوقف شد.");
 
-        var operationKey = BuildOperationKey(category.CategoryId, destinationCategoryName);
+        var operationKey = BuildOperationKey(project.CategoryId, category.CategoryId, destinationCategoryName);
         await using var categoryLeases = categoryLockAlreadyHeld
             ? null
             : await AcquireCategoryLocksAsync(project.CategoryId, category.CategoryId, cancellationToken);
@@ -125,8 +125,8 @@ public sealed class ProjectCategoryMoveService(
         }
     }
 
-    internal static string BuildOperationKey(string categoryId, string categoryName) =>
-        $"category-move|{categoryId}|{Uri.EscapeDataString(categoryName)}";
+    internal static string BuildOperationKey(string sourceCategoryId, string targetCategoryId, string categoryName) =>
+        $"category-move|{sourceCategoryId}|{targetCategoryId}|{Uri.EscapeDataString(categoryName)}";
 
     internal static bool ContainsReparsePoint(string path)
     {
