@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <Version>2.4.0</Version>
+    <Product>Git Manager</Product>
+    <AssemblyTitle>Git Manager</AssemblyTitle>
+    <Description>Windows desktop GitHub repository library manager.</Description>
+    <Copyright>Copyright © 2026</Copyright>
+    <NeutralLanguage>fa-IR</NeutralLanguage>
+  </PropertyGroup>
+</Project>

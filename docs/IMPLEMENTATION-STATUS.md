@@ -35,13 +35,24 @@
 - Persian UI: filter, search, archive/unarchive with confirmation, availability column.
 - Idempotent catalog migration to schema 2.3 (blank lifecycle → Active; unknown non-empty values preserved).
 
-Lifecycle is implemented on this branch only. It is not merged to `main`. Windows CI run `45361673077` on `f2ca734` succeeded. Unit tests plus Windows CI do **not** mean installer or production readiness.
+Lifecycle is implemented on `work/wp-2-3-lifecycle-management`. It is not merged to `main`. Windows CI run `45361673077` on `f2ca734` succeeded. Unit tests plus Windows CI do **not** mean installer or production readiness.
+
+## WP-2.4 on `work/wp-2-4-windows-productization`
+
+- Self-contained win-x64 Release publish and portable ZIP.
+- Inno Setup installer `GitManager-Setup-x64.exe` with Start Menu and Desktop shortcuts.
+- Upgrade/repair via a stable AppId.
+- Uninstall removes program files and shortcuts only; workspace and `%LOCALAPPDATA%\GitManager` are preserved.
+- `--ci-smoke` headless launch; Windows CI smokes install, launch, repair, upgrade, and uninstall.
+- SHA-256 hashes for installer, portable ZIP, and source handoff.
+
+This is not a signed production release. It is not a Product Owner clean-machine installation test.
 
 ## Not yet release-ready
 
 - Publish, diff review, secret scanning, and push confirmation are not implemented.
 - Submodule and Git LFS backup coverage is not implemented.
-- Installer, uninstaller, signing, and clean-machine validation are pending.
+- Code signing and Product Owner clean-machine validation are pending.
 - Restore-from-backup still writes an unregistered folder and is not a lifecycle un-archive.
 
-Neither the foundation PR, WP-2.1, WP-2.2, nor WP-2.3 has been merged into `main`.
+Neither the foundation PR, WP-2.1, WP-2.2, WP-2.3, nor WP-2.4 has been merged into `main`.

@@ -20,15 +20,51 @@ jobs:
         run: dotnet build src/GitManager.App/GitManager.App.csproj --configuration Release --no-restore
       - name: Run unit tests
         run: dotnet test tests/GitManager.Tests/GitManager.Tests.csproj --configuration Release
-      - name: Publish portable folder
-        run: dotnet publish src/GitManager.App/GitManager.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output artifacts/GitManager-win-x64
-      - name: Create source handoff, manifest, and SHA-256
+      - name: Publish self-contained win-x64
+        run: >
+          dotnet publish src/GitManager.App/GitManager.App.csproj
+          --configuration Release --runtime win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:IncludeAllContentForSelfExtract=true
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          --output artifacts/GitManager-win-x64
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed" }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "ISCC.exe not found at $iscc" }
+      - name: Build installer, portable ZIP, hashes, and source handoff
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $compileLog = Join-Path $PWD "artifacts/inno-compile.log"
+          $publishDir = Join-Path $PWD "artifacts/GitManager-win-x64"
+          $setup = Join-Path $PWD "artifacts/GitManager-Setup-x64.exe"
+          $portable = Join-Path $PWD "artifacts/GitManager-win-x64-portable.zip"
           $sourceArchive = Join-Path $PWD "artifacts/GitManager-source.zip"
           $manifest = Join-Path $PWD "artifacts/SOURCE-MANIFEST-SHA256.txt"
-          $handoff = Join-Path $PWD "artifacts/GitManager-WP-2.3-Handoff.zip"
+          $handoff = Join-Path $PWD "artifacts/GitManager-WP-2.4-Handoff.zip"
+          $releaseHashes = Join-Path $PWD "artifacts/RELEASE-SHA256.txt"
+
+          if (-not (Test-Path -LiteralPath (Join-Path $publishDir "GitManager.exe"))) {
+            throw "Published GitManager.exe is missing."
+          }
+
+          $iss = Join-Path $PWD "installer\GitManager.iss"
+          $compileOutput = & $iscc "/DMyAppVersion=2.4.0" "/DPublishDir=$publishDir" $iss 2>&1
+          $isccExit = $LASTEXITCODE
+          $compileOutput | Set-Content -LiteralPath $compileLog -Encoding utf8
+          $compileOutput | Write-Host
+          if ($isccExit -ne 0) { throw "ISCC failed with exit $isccExit" }
+          if (-not (Test-Path -LiteralPath $setup)) { throw "GitManager-Setup-x64.exe was not produced." }
+
+          if (Test-Path -LiteralPath $portable) { Remove-Item -LiteralPath $portable -Force }
+          Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $portable -CompressionLevel Optimal
 
           git archive --format=zip --output="$sourceArchive" HEAD
           if ($LASTEXITCODE -ne 0) { throw "git archive failed" }
@@ -41,24 +77,56 @@ jobs:
             $fileHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $relativePath).Hash.ToLowerInvariant()
             $manifestEntries += "$fileHash  $relativePath"
           }
-
           $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceArchive).Hash.ToLowerInvariant()
           $manifestEntries += "$sourceHash  GitManager-source.zip"
           Set-Content -LiteralPath $manifest -Value $manifestEntries -Encoding utf8
           Compress-Archive -Path @($sourceArchive, $manifest) -DestinationPath $handoff -CompressionLevel Optimal -Force
 
-          $handoffHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $handoff).Hash.ToLowerInvariant()
-          Set-Content -LiteralPath "$handoff.sha256" -Value "$handoffHash  GitManager-WP-2.3-Handoff.zip" -Encoding ascii
-
+          $hashLines = @()
+          foreach ($file in @($setup, $portable, $handoff)) {
+            $name = Split-Path $file -Leaf
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant()
+            Set-Content -LiteralPath "$file.sha256" -Value "$hash  $name" -Encoding ascii
+            $hashLines += "$hash  $name"
+          }
+          Set-Content -LiteralPath $releaseHashes -Value $hashLines -Encoding ascii
+      - name: Installer install/upgrade/uninstall smoke
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/install-evidence | Out-Null
+          & "$PWD\scripts\ci-install-smoke.ps1" `
+            -SetupExe "$PWD\artifacts\GitManager-Setup-x64.exe" `
+            -ReportPath "$PWD\artifacts\install-evidence\install-uninstall-report.md" `
+            -LogDirectory "$PWD\artifacts\install-evidence"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: git-manager-wp-2-3-source-handoff
+          name: git-manager-wp-2-4-install-evidence
           path: |
-            artifacts/GitManager-WP-2.3-Handoff.zip
-            artifacts/GitManager-WP-2.3-Handoff.zip.sha256
-          if-no-files-found: error
-
+            artifacts/install-evidence/
+            artifacts/inno-compile.log
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: git-manager-wp-2-4-release
+          path: |
+            artifacts/GitManager-Setup-x64.exe
+            artifacts/GitManager-Setup-x64.exe.sha256
+            artifacts/GitManager-win-x64-portable.zip
+            artifacts/GitManager-win-x64-portable.zip.sha256
+            artifacts/RELEASE-SHA256.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: git-manager-wp-2-4-source-handoff
+          path: |
+            artifacts/GitManager-WP-2.4-Handoff.zip
+            artifacts/GitManager-WP-2.4-Handoff.zip.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: git-manager-win-x64
           path: artifacts/GitManager-win-x64/

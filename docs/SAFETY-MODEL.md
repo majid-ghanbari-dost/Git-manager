@@ -25,6 +25,10 @@ Before publishing:
 6. Stop if the remote has diverged; offer fetch/compare/reconcile, never force-push automatically.
 7. Require explicit final confirmation.
 
+## Install and uninstall
+
+The install directory is not the workspace. Uninstall and upgrade must not delete `%LOCALAPPDATA%\GitManager`, the SQLite catalog, repositories, backups, or notes. Never install the application into a workspace folder.
+
 ## Destructive operations
 
 Moving a project between lifecycle folders must not delete its backups. Delete project, delete backup, overwrite restore, and force operations must be separate, explicit actions with clear target paths and consequences.

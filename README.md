@@ -6,7 +6,7 @@ A Windows desktop application for organizing, cloning, backing up, restoring, an
 
 ## Current implementation
 
-Work is stacked on isolated branches and has not been merged into `main`. WP-2.2 delivered category CRUD and safe project moves. WP-2.3 on `work/wp-2-3-lifecycle-management` adds physical Active / On-Hold / Archived moves of the complete project container, append-only lifecycle history, crash recovery, Missing/PathDrift detection, and Persian filter/search/archive UI. Publishing, submodule/LFS fidelity, and installer packaging remain incomplete. Passing unit tests and Windows CI do not mean the product is ready to install.
+Work is stacked on isolated branches and has not been merged into `main`. WP-2.3 added physical lifecycle moves. WP-2.4 on `work/wp-2-4-windows-productization` adds a self-contained Windows x64 installer (`GitManager-Setup-x64.exe`), portable ZIP, SHA-256 checksums, and a Windows-runner install/uninstall smoke. Uninstall does not delete the user workspace or LocalAppData catalog/journal. This is not a signed production release and is not a Product Owner clean-machine test. Publishing and submodule/LFS fidelity remain incomplete.
 
 See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work and limitations.
 
@@ -49,7 +49,7 @@ See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work an
 
 ## Development
 
-Prerequisites: Windows 10/11 x64, .NET 10 SDK for development, and Git for Windows available on `PATH`. The CI artifact is a self-contained portable build; a Setup.exe installer has not yet been produced.
+Prerequisites: Windows 10/11 x64, .NET 10 SDK for development, and Git for Windows available on `PATH`. CI publishes a self-contained portable ZIP and `GitManager-Setup-x64.exe`. Git for Windows is not bundled inside the installer.
 
 Open `src/GitManager.App/GitManager.App.csproj` in Visual Studio 2026 or build with the .NET 10 SDK on Windows.
 
