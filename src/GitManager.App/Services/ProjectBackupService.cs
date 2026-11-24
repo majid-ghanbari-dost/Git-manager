@@ -5,30 +5,48 @@ using GitManager.App.Models;
 
 namespace GitManager.App.Services;
 
-public sealed class ProjectBackupService(GitProcess git)
+public sealed class ProjectBackupService
 {
+    private readonly GitProcess _git;
+    private readonly ProjectOperationJournal _journal;
+    private readonly ProjectOperationLock _operationLock;
+
+    public ProjectBackupService(
+        GitProcess git,
+        ProjectOperationJournal? journal = null,
+        ProjectOperationLock? operationLock = null)
+    {
+        _git = git;
+        _journal = journal ?? new ProjectOperationJournal();
+        _operationLock = operationLock ?? new ProjectOperationLock();
+    }
+
     public async Task<string> CreateBackupAsync(ProjectRecord project, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(project.RepositoryPath))
             throw new DirectoryNotFoundException("پوشه مخزن پروژه پیدا نشد.");
 
+        await using var lease = await _operationLock.AcquireAsync("project:" + project.ProjectId, cancellationToken);
         var backupRoot = Path.Combine(project.ContainerPath, "backups");
         Directory.CreateDirectory(backupRoot);
         var backupId = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
         var staging = Path.Combine(backupRoot, ".staging-" + Guid.NewGuid().ToString("N"));
         var final = Path.Combine(backupRoot, backupId);
-        Directory.CreateDirectory(staging);
+        var operation = await _journal.BeginAsync("Backup", project.ProjectId, project.ProjectId, staging, final, cancellationToken);
 
         try
         {
+            Directory.CreateDirectory(staging);
+            await _journal.SetStateAsync(operation.OperationId, "Running", cancellationToken: cancellationToken);
+
             var bundlePath = Path.Combine(staging, "repository.bundle");
-            await git.RunAsync(project.RepositoryPath, "bundle", "create", bundlePath, "--all");
-            await git.RunAsync(project.RepositoryPath, "bundle", "verify", bundlePath);
+            await _git.RunAsync(project.RepositoryPath, cancellationToken, "bundle", "create", bundlePath, "--all");
+            await _git.RunAsync(project.RepositoryPath, cancellationToken, "bundle", "verify", bundlePath);
 
             var snapshotPath = Path.Combine(staging, "working-tree.zip");
             await CreateWorkingTreeSnapshotAsync(project.RepositoryPath, snapshotPath, cancellationToken);
 
-            var deletedOutput = await git.RunAsync(project.RepositoryPath, "ls-files", "--deleted", "-z");
+            var deletedOutput = await _git.RunAsync(project.RepositoryPath, cancellationToken, "ls-files", "--deleted", "-z");
             var deletedFiles = deletedOutput.Split((char)0, StringSplitOptions.RemoveEmptyEntries).ToList();
             var manifest = new BackupManifest
             {
@@ -45,12 +63,23 @@ public sealed class ProjectBackupService(GitProcess git)
             await File.WriteAllTextAsync(Path.Combine(staging, "manifest.json"),
                 JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
 
+            await _journal.SetStateAsync(operation.OperationId, "CommitPending", cancellationToken: cancellationToken);
             Directory.Move(staging, final);
+            await _journal.SetStateAsync(operation.OperationId, "Completed", cancellationToken: cancellationToken);
             return final;
         }
-        catch
+        catch (Exception ex)
         {
-            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+            try
+            {
+                if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+                await _journal.SetStateAsync(operation.OperationId, "RolledBack", ex.Message, CancellationToken.None);
+            }
+            catch (Exception cleanupError)
+            {
+                await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                    $"{ex.Message} | پاک‌سازی staging ناموفق بود: {cleanupError.Message}", CancellationToken.None);
+            }
             throw;
         }
     }
