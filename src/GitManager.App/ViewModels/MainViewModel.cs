@@ -42,6 +42,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             RenameCategoryCommand.NotifyCanExecuteChanged();
             DeleteCategoryCommand.NotifyCanExecuteChanged();
             MoveProjectCommand.NotifyCanExecuteChanged();
+            MoveCategoryUpCommand.NotifyCanExecuteChanged();
+            MoveCategoryDownCommand.NotifyCanExecuteChanged();
         }
     }
     public string NewCategoryName { get => _newCategoryName; set { _newCategoryName = value; OnPropertyChanged(); CreateCategoryCommand.NotifyCanExecuteChanged(); } }
@@ -68,6 +70,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public AsyncRelayCommand RenameCategoryCommand { get; }
     public AsyncRelayCommand DeleteCategoryCommand { get; }
     public AsyncRelayCommand MoveProjectCommand { get; }
+    public AsyncRelayCommand MoveCategoryUpCommand { get; }
+    public AsyncRelayCommand MoveCategoryDownCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -85,6 +89,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         DeleteCategoryCommand = new AsyncRelayCommand(DeleteCategoryAsync, () => _categoryManagement is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
         MoveProjectCommand = new AsyncRelayCommand(MoveSelectedProjectAsync,
             () => _projectCategoryMover is not null && SelectedProject is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
+        MoveCategoryUpCommand = new AsyncRelayCommand(() => ReorderCategoryAsync(-1), CanMoveCategoryUp);
+        MoveCategoryDownCommand = new AsyncRelayCommand(() => ReorderCategoryAsync(1), CanMoveCategoryDown);
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
 
@@ -133,6 +139,36 @@ public sealed class MainViewModel : INotifyPropertyChanged
             RenameCategoryCommand.NotifyCanExecuteChanged();
             DeleteCategoryCommand.NotifyCanExecuteChanged();
             MoveProjectCommand.NotifyCanExecuteChanged();
+            MoveCategoryUpCommand.NotifyCanExecuteChanged();
+            MoveCategoryDownCommand.NotifyCanExecuteChanged();
+        }
+        catch (Exception ex) { StatusMessage = ex.Message; }
+    }
+
+    private bool CanMoveCategoryUp()
+    {
+        var index = Categories.IndexOf(SelectedCategory);
+        return _categoryManagement is not null && index > 1;
+    }
+
+    private bool CanMoveCategoryDown()
+    {
+        var index = Categories.IndexOf(SelectedCategory);
+        return _categoryManagement is not null && index > 0 && index < Categories.Count - 1;
+    }
+
+    private async Task ReorderCategoryAsync(int direction)
+    {
+        if (_categoryManagement is null) return;
+        try
+        {
+            var category = (await _categoryManagement.GetCategoriesAsync())
+                .FirstOrDefault(x => x.Name.Equals(SelectedCategory, StringComparison.OrdinalIgnoreCase));
+            if (category is null) throw new InvalidOperationException("دسته‌بندی انتخاب‌شده پیدا نشد.");
+            if (direction < 0) await _categoryManagement.MoveUpAsync(category.CategoryId);
+            else await _categoryManagement.MoveDownAsync(category.CategoryId);
+            await RefreshCategoriesAsync();
+            StatusMessage = "ترتیب دسته‌بندی‌ها ذخیره شد.";
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
     }
