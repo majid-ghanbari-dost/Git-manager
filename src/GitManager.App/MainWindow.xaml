@@ -67,6 +67,7 @@
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
                         <TextBlock Text="پروژه‌های کتابخانه" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
                         <Button Content="پشتیبان‌گیری + SHA-256" Command="{Binding BackupCommand}" Margin="16,0,0,0" Padding="12,5"/>
+                        <Button Content="انتقال پروژه به دسته انتخاب‌شده" Command="{Binding MoveProjectCommand}" Margin="8,0,0,0" Padding="12,5"/>
                         <Button Content="بازیابی پشتیبان" Command="{Binding RestoreCommand}" Margin="8,0,0,0" Padding="12,5"/>
                     </StackPanel>
                     <DataGrid ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}" AutoGenerateColumns="False" IsReadOnly="True"
