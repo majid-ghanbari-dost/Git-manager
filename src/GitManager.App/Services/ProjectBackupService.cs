@@ -28,9 +28,12 @@ public sealed class ProjectBackupService(GitProcess git)
             var snapshotPath = Path.Combine(staging, "working-tree.zip");
             await CreateWorkingTreeSnapshotAsync(project.RepositoryPath, snapshotPath, cancellationToken);
 
+            var deletedOutput = await git.RunAsync(project.RepositoryPath, "ls-files", "--deleted", "-z");
+            var deletedFiles = deletedOutput.Split((char)0, StringSplitOptions.RemoveEmptyEntries).ToList();
             var manifest = new BackupManifest
             {
                 ProjectId = project.ProjectId,
+                DeletedTrackedFiles = deletedFiles,
                 CanonicalRemoteUrl = project.CanonicalRemoteUrl,
                 CreatedAtUtc = DateTime.UtcNow,
                 GitBundleSha256 = await HashFileAsync(bundlePath, cancellationToken),
@@ -98,6 +101,7 @@ public sealed class ProjectBackupService(GitProcess git)
     private sealed class BackupManifest
     {
         public string ProjectId { get; set; } = "";
+        public List<string> DeletedTrackedFiles { get; set; } = [];
         public string CanonicalRemoteUrl { get; set; } = "";
         public DateTime CreatedAtUtc { get; set; }
         public string GitBundleSha256 { get; set; } = "";
