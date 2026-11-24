@@ -24,7 +24,7 @@ public sealed class ProjectOperationJournal
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "GitManager", "operations.sqlite3");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath }.ToString();
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
