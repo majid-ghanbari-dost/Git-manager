@@ -15,12 +15,13 @@
   - The .git internals are excluded from the snapshot; Git history is retained in the bundle.
   - SHA-256 hashes are recorded in a JSON manifest and checked after creation.
   - Backup is staged and atomically moved into its final directory.
-- Automated test covers backup contents and SHA-256 tamper detection.
+- Restore runs only after manifest/hash verification and writes into a new isolated container.
+- Restore overlays working files, restores deleted tracked-file state, retains the Git commit history, and rejects unsafe archive paths.
+- Automated integration test covers backup, restore, untracked files, deleted tracked files, and SHA-256 tamper rejection.
 - Windows CI builds, runs tests, and publishes a self-contained win-x64 portable output.
 
 ## Not yet release-ready
 
-- Restore from backup into a new destination is not implemented.
 - Recovery journal and crash recovery are not implemented.
 - Category CRUD and lifecycle moves are not implemented.
 - Publish, diff review, secret scanning, and push confirmation are not implemented.
