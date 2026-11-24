@@ -50,10 +50,13 @@
             </Border>
             <Border Grid.Column="2" Background="White" CornerRadius="9" Padding="16">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="پروژه‌های کتابخانه" FontSize="18" FontWeight="Bold" Margin="0,0,0,12"/>
-                    <DataGrid ItemsSource="{Binding Projects}" AutoGenerateColumns="False" IsReadOnly="True"
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                        <TextBlock Text="پروژه‌های کتابخانه" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Button Content="پشتیبان‌گیری و بررسی SHA-256" Command="{Binding BackupCommand}" Margin="16,0,0,0" Padding="12,5"/>
+                    </StackPanel>
+                    <DataGrid ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}" AutoGenerateColumns="False" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                              FlowDirection="RightToLeft" RowHeight="38">
+                              FlowDirection="RightToLeft" RowHeight="38" SelectionMode="Single">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="پروژه" Binding="{Binding Repository}" Width="*"/>
                             <DataGridTextColumn Header="مالک" Binding="{Binding Owner}" Width="150"/>
