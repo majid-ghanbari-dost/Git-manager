@@ -9,7 +9,9 @@
 
 This mission is audit, analysis, and design only. No WP-2.3 code is implemented here. No migration is created or applied. No PR is merged or edited. `main` is not modified.
 
-**GitHub delivery of this file:** this document is committed on `arena/9d4846eb-git-manager` and opened as a documentation PR against `main`. It is **intentionally not** on `work/wp-2-2-category-management`. Rewriting WP-2.2 was forbidden. Anyone looking for this file on the WP-2.2 branch will not find it; that is policy, not a missing deliverable.
+**GitHub delivery of this file:** this document is committed on `arena/9d4846eb-git-manager` and opened as documentation PR **#4** (Draft) against `main`. It is **intentionally not** on `work/wp-2-2-category-management`. Rewriting WP-2.2 was forbidden. Anyone looking for this file on the WP-2.2 branch will not find it; that is policy, not a missing deliverable.
+
+**Final architecture revision (this edit):** lifecycle history is append-only and **must not** insert `result='Completed'` in the catalog transaction that still leaves the crash journal `Running`. Canonical decision: **Option A** (multi-stage events `CatalogCommitted` then `Completed`). Option B (mutate a Pending row) is rejected because it rewrites history. See §F below.
 
 All line numbers below refer to tree `d66f2049d8bf850a7cf4679b097531438b202e20` (`work/wp-2-2-category-management`) unless noted.
 
@@ -149,9 +151,12 @@ All six real transitions share one algorithm. Only the path prefix and confirm f
 | 1 begin | unchanged | unchanged | INSERT type=`LifecycleMove`, staging=source, final=dest, state=`Prepared` |
 | 2 running | unchanged | unchanged | state=`Running` |
 | 3 `Directory.Move` | source gone, dest exists, inner `repository/`, `backups/`, `notes/` intact, `.git` intact, dirty files intact | unchanged | `Running` |
-| 4 catalog commit | dest exists | `lifecycle` = target; `container_path`/`repository_path` = dest; `lifecycle_changed_at_utc` now; event Result=`Completed` | still `Running` (crash window) |
-| 5 journal complete | dest exists | same | `Completed` |
-| 6 prune empty parents | may remove empty owner/category dirs under the **source** lifecycle folder only; never `01_Active` itself | unchanged | unchanged |
+| 4 catalog commit | dest exists | `lifecycle` = target; paths updated; `last_operation_status='LifecycleMove:CatalogCommitted'`; event **`CatalogCommitted` only** | still `Running` |
+| 5 journal CommitPending then Completed | dest exists | still no `Completed` event | `CommitPending` then `Completed` |
+| 6 event Completed | dest exists | INSERT `Completed`; `last_operation_status='LifecycleMove:Completed'` | already `Completed` |
+| 7 prune empty parents | may remove empty owner/category dirs under the **source** lifecycle folder only; never `01_Active` itself | unchanged | unchanged |
+
+Step 4 **must not** write `result='Completed'`. Canonical crash/event matrix: §F.6.
 
 **Crash / recovery** (dedicated `LifecycleMoveRecoveryService`; generic cleaner **must skip** this type, same pattern as L27 of `ProjectOperationRecoveryService`: `if (operation.OperationType is "CategoryMove" or "CategoryRename") continue;` — WP-2.3 adds `"LifecycleMove"` to that set).
 
@@ -335,15 +340,193 @@ Un-archive is the same `Directory.Move` in reverse, not `ProjectRestoreService` 
 
 ### EV.10 Architecture verdict for this completion review
 
-Design is complete enough to implement WP-2.3 without ambiguity:
+Design is complete enough to implement WP-2.3 without ambiguity, **after** the event-consistency revision in §F:
 
 - Physical whole-container move
 - Fail-closed unknown lifecycle
 - Journal type `LifecycleMove` skipped by generic cleaner
 - Matrix, crash table, lock order, WP-2.2 non-interference
 - Docs drift recorded, files not rewritten
+- Append-only lifecycle events; `Completed` only after journal `Completed`
 
 Not blocked by missing source access. Not blocked by contradictory product behavior — the contradictions are in **docs**, and the source of truth is WP-2.2 code + CI.
+
+---
+
+## F. Final architecture revision — Lifecycle event consistency
+
+This section **supersedes** the earlier sentence that inserted `Result=Completed` inside the catalog commit while the journal was still `Running` (old EV.5 step 4 and old §5.6 step 17). Implementers must follow §F, not those older lines.
+
+### F.1 The distributed-commit problem
+
+Two different SQLite files are involved:
+
+| Store | Path | Role |
+| --- | --- | --- |
+| Catalog | `<workspace>/00_Manager/catalog/projects.sqlite3` | source of truth for `projects.lifecycle` and history |
+| Journal | `%LocalAppData%\GitManager\operations.sqlite3` | crash log (`ProjectOperationJournal` L23–L25, L36–L37) |
+
+There is **no** atomic cross-database transaction. Any design that writes `Completed` into the catalog and only afterwards marks the journal `Completed` will, on crash, show a successful history row for an operation whose crash log is still `Running`. That is the defect under review.
+
+`last_operation_status` on `projects` is a **mutable current-status** field and may be updated. `project_lifecycle_events` is an **immutable audit log** and may not.
+
+### F.2 Options
+
+**Option A — append-only multi-stage events**
+
+After `Directory.Move`, one catalog transaction writes the new lifecycle/paths **and** inserts `result='CatalogCommitted'`. After the journal reaches `Completed`, a **second** catalog insert writes `result='Completed'`. Recovery inserts at most one terminal row (`Completed` / `RolledBack` / `RecoveryRequired`) per `operation_id`. No row is ever updated or deleted.
+
+**Option B — Pending row, then a final row (or an in-place update)**
+
+Insert `result='Pending'` in the catalog transaction. After journal completion, either `UPDATE Pending → Completed` (rewrite) or insert a separate final row and leave Pending in place.
+
+### F.3 Decision: Option A
+
+**Chosen: Option A.** Option B is rejected.
+
+| Criterion | A | B with `UPDATE` | B with extra final row |
+| --- | --- | --- | --- |
+| No rewrite/delete of history | yes | **no** — forbidden by the append-only rule | yes, but then it **is** A with a worse name |
+| `Completed` cannot exist while journal is `Running` | yes | only if the update is strictly after journal complete; crash leaves `Pending` which readers may treat as success | same as A |
+| Crash after catalog, before journal complete | history shows `CatalogCommitted` (true: catalog+disk moved) and **not** `Completed` | history shows `Pending`; ambiguous | same as A if Pending ≡ CatalogCommitted |
+| Recovery can append the real terminal result | yes, unique partial index | would need UPDATE; races with a second instance | yes |
+| Timestamp of catalog commit vs journal complete | two rows, two timestamps | lost if updated in place | two rows |
+| Name accuracy | `CatalogCommitted` is an exact claim | `Pending` does not say *what* is pending | same |
+
+`CatalogCommitted` is not a user-facing success. The UI and any “تاریخچه وضعیت” query treat **only** `Completed` as a successful transition. `CatalogCommitted` without a later terminal row is **in-doubt** and must be resolved by recovery before the UI claims «بایگانی شد».
+
+### F.4 Event schema (normative)
+
+```sql
+CREATE TABLE IF NOT EXISTS project_lifecycle_events (
+    event_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    project_id TEXT NOT NULL,
+    from_lifecycle TEXT NOT NULL,
+    to_lifecycle TEXT NOT NULL,
+    operation_id TEXT,
+    result TEXT NOT NULL,
+    git_status_summary TEXT,
+    availability_at_start TEXT,
+    message TEXT,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_lifecycle_events_project
+    ON project_lifecycle_events(project_id, event_seq);
+
+-- At most one catalog-commit breadcrumb per crash-journal operation.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_lifecycle_events_operation_catalog_committed
+    ON project_lifecycle_events(operation_id)
+    WHERE result = 'CatalogCommitted' AND operation_id IS NOT NULL;
+
+-- At most one terminal outcome per crash-journal operation.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_lifecycle_events_operation_terminal
+    ON project_lifecycle_events(operation_id)
+    WHERE result IN ('Completed', 'RolledBack', 'RecoveryRequired')
+      AND operation_id IS NOT NULL;
+```
+
+`result` values:
+
+| result | When inserted | Meaning | User-visible success? |
+| --- | --- | --- | --- |
+| `CatalogCommitted` | same catalog TX as `UPDATE projects` after `Directory.Move` | disk + catalog now at target; journal not yet `Completed` | **no** |
+| `Completed` | only after `journal.SetStateAsync(Completed)` returns, or by recovery once the journal row is already `Completed` | operation finished | **yes** |
+| `RolledBack` | after a successful disk rollback, or recovery R1/R4 | no durable lifecycle change (catalog at source) | no |
+| `RecoveryRequired` | recovery cannot safely decide; or disk rollback failed | operator review; nothing deleted | no |
+| `Rejected` | optional, deny **before** `journal.Begin` (no `operation_id`) | preflight refused; no disk change | no |
+
+Rules:
+
+1. `INSERT` only. No `UPDATE`, no `DELETE`, no `UPSERT` of event rows. `INSERT OR IGNORE` is allowed solely to absorb unique-index collisions during recovery.
+2. `Completed` is illegal unless the journal row for that `operation_id` is already `Completed` (happy path: insert after `SetStateAsync` returns; recovery path: insert after recovery itself has set the journal to `Completed`).
+3. Do not insert `Completed` if `CatalogCommitted` is missing **and** the catalog still points at the source path (that would invent a success).
+4. If catalog+disk are already at dest but `CatalogCommitted` is missing (should not happen if they share one TX), recovery may `INSERT OR IGNORE` `CatalogCommitted` then `Completed`.
+5. Order for readers: `ORDER BY event_seq` (monotonic, survives restart). Do not order by GUID `event_id`.
+6. No-op transitions insert **zero** events.
+7. Migration inserts **zero** events.
+
+Mutable `projects.last_operation_status` (not history):
+
+- `LifecycleMove:CatalogCommitted` after the catalog TX
+- `LifecycleMove:Completed` after the `Completed` event insert
+- `LifecycleMove:RolledBack` / `LifecycleMove:RecoveryRequired` from recovery
+
+### F.5 Happy path (replaces old §5.6 steps 17–19)
+
+```text
+13. journal Begin LifecycleMove (Prepared)
+14. journal Running
+15. Directory.CreateDirectory(parent(dest))
+16. Directory.Move(source, dest)
+17. catalog TX (single SQLite transaction on projects.sqlite3):
+      UPDATE projects SET
+        lifecycle = $to,
+        container_path = $dest,
+        repository_path = $dest/repository,
+        last_operation_status = 'LifecycleMove:CatalogCommitted',
+        lifecycle_changed_at_utc = $now,
+        availability = 'Available',
+        last_seen_at_utc = $now
+      WHERE project_id = $id
+      INSERT project_lifecycle_events (..., result = 'CatalogCommitted', operation_id = $op)
+    -- NOT result=Completed. NOT last_operation_status=Completed.
+18. journal CommitPending
+19. journal Completed                    -- must succeed before step 20
+20. catalog TX 2:
+      INSERT project_lifecycle_events (..., result = 'Completed', operation_id = $op)
+      UPDATE projects SET last_operation_status = 'LifecycleMove:Completed'
+        WHERE project_id = $id
+21. best-effort prune empty source parents
+```
+
+Step 18 uses the existing journal state `CommitPending` already defined in WP-2.1 (`ProjectOperationJournal` comments / import-backup-restore). Category move skipped it; lifecycle must not.
+
+If step 19 throws: **do not** run step 20. Leave `CatalogCommitted` in place. Leave journal at `CommitPending` or `Running`. Recovery, not the catch block, inserts `Completed` after it has marked the journal `Completed`.
+
+If step 20 throws after 19 succeeded: journal is already `Completed`; recovery’s event-reconcile pass inserts the missing `Completed` row (`INSERT OR IGNORE`).
+
+Catch after step 16, catalog TX **not** committed: attempt `Directory.Move` back; journal `RolledBack` or `RecoveryRequired`; insert `RolledBack` / `RecoveryRequired`; never insert `Completed` or `CatalogCommitted`.
+
+### F.6 Crash / recovery matrix (events included)
+
+Dedicated `LifecycleMoveRecoveryService` still owns disk+journal (R-table). After that, `ReconcileLifecycleEventsFromJournalAsync` appends **at most one** terminal event per `operation_id`. Generic staging cleaner still skips `LifecycleMove`.
+
+| Scenario | Disk source | Disk dest | Catalog path | Journal before recovery | Events before recovery | Recovery disk/journal | Events after recovery |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **S1 Crash before `Directory.Move`** | exists | absent | source | Prepared or Running | none | R1: no disk change; journal `RolledBack` | append `RolledBack` only. **Zero** `CatalogCommitted`. **Zero** `Completed`. |
+| **S2 Crash after `Directory.Move`, before catalog TX** | absent | exists | source | Running | none | R4: move dest → source; journal `RolledBack`. If move-back fails → `RecoveryRequired` | `RolledBack` or `RecoveryRequired`. **Zero** `Completed`. |
+| **S3 Crash after catalog commit** | absent | exists | dest | Running | `CatalogCommitted` only | R3: no disk change; journal `Completed` | append `Completed` (exactly one). Keep `CatalogCommitted`. |
+| **S4 Crash before journal complete** (after 17, during 18/19) | absent | exists | dest | Running or CommitPending | `CatalogCommitted` only | same as S3 | same as S3 |
+| **S5 Journal complete fails** (`SetStateAsync(Completed)` throws) | absent | exists | dest | Running or CommitPending | `CatalogCommitted` only | same as S3 on next startup; do **not** mark `RecoveryRequired` merely because the journal write failed while disk+catalog already agree | same as S3 |
+| **S6 Recovery successful** (S3/S4/S5 replayed; or R1/R4 disk rollback succeeded) | matches catalog | — | consistent | terminal (`Completed` or `RolledBack`) | breadcrumb + maybe no terminal yet | no second disk op; event reconcile only | exactly one terminal; second recovery `INSERT OR IGNORE` adds **zero** rows |
+| **S7 Recovery unsuccessful** (R2, R5, R6, R7, R9, R10, move-back failed) | ambiguous | ambiguous | maybe dest or source | `RecoveryRequired` | `CatalogCommitted` may or may not exist | **delete nothing** | append `RecoveryRequired`. **Never** append `Completed`. Do not delete `CatalogCommitted`. |
+
+Idempotence of S6: unique indexes in §F.4 make a second `Completed` or second `RecoveryRequired` for the same `operation_id` a no-op.
+
+S5 vs WP-2.2: `ProjectCategoryMoveService` L82–L86 sets journal `RecoveryRequired` if `catalogUpdated` and a later exception occurs. For lifecycle, if disk+catalog already agree on dest, that exception is **not** ambiguity — it is a journal-write failure. Recovery R3 is the correct finisher. Marking `RecoveryRequired` here would force an operator to “review” a successful move and would block inserting `Completed`. Lifecycle must **not** copy that catch arm when catalog+disk agree.
+
+### F.7 Who reads what
+
+```text
+Successful transition in UI:
+  EXISTS event result='Completed' for that operation_id
+
+In-doubt (status bar, not a green «بایگانی شد»):
+  EXISTS CatalogCommitted AND NOT EXISTS terminal
+  OR journal state IN (Prepared, Running, CommitPending, RecoveryRequired)
+
+Operator review list:
+  journal RecoveryRequired
+  plus any CatalogCommitted without terminal after recovery ran
+```
+
+History panel: all rows `ORDER BY event_seq`. Show `CatalogCommitted` as «ثبت در کاتالوگ؛ در انتظار نهایی‌سازی» and `Completed` as «تکمیل شد». Never hide `CatalogCommitted` after `Completed`; they are two facts.
+
+### F.8 Why this stays compatible with WP-2.2
+
+WP-2.2 has no `project_lifecycle_events` table. Category moves do not write these rows. Lifecycle recovery still takes `category:` then `project:` locks. Event inserts are catalog-only and do not change `category_id`. Unique indexes live on the new table only.
 
 ---
 
@@ -1080,17 +1263,20 @@ Project
   LastOperationStatus       // last finished op summary
   LifecycleChangedAtUtc
 
-ProjectLifecycleEvent       // append-only in catalog
-  EventId
+ProjectLifecycleEvent       // append-only in catalog; see §F
+  EventSeq                  // INTEGER PK AUTOINCREMENT; read order
+  EventId                   // UUID, unique, not used for ordering
   ProjectId
   FromLifecycle, ToLifecycle
   OperationId               // journal id if any
-  Result                    // Completed | RolledBack | RecoveryRequired | Rejected
+  Result                    // CatalogCommitted | Completed | RolledBack | RecoveryRequired | Rejected
   GitStatusSummary          // "clean" | "dirty: N paths" | "unknown"
   AvailabilityAtStart
   Message                   // sanitized
   CreatedAtUtc
 ```
+
+`Completed` is inserted only after the crash journal row is `Completed`. The catalog TX after `Directory.Move` inserts `CatalogCommitted`, never `Completed`. No event row is updated or deleted.
 
 `04_Quarantine` remains a folder created at workspace init. **No UI transition into Quarantine in WP-2.3.** Invalid stored lifecycle values fail closed.
 
@@ -1168,32 +1354,12 @@ Idempotent no-op: source == target and path already canonical and Available → 
 10. if Archived involved and corresponding confirm false → throw
 11. dest = GetProjectContainer(root, target, category, owner, repo)
 12. if dest exists → throw (no overwrite)
-13. journal Begin LifecycleMove
-      staging_path = source container
-      final_path   = dest container
-      payload_json = { from, to, categoryId, gitStatus, workspaceRoot }
-14. state Running
-15. Directory.CreateDirectory(parent(dest))
-16. Directory.Move(source, dest)
-17. catalog transaction:
-      UPDATE projects SET
-        lifecycle = $to,
-        container_path = $dest,
-        repository_path = $dest/repository,
-        last_operation_status = 'LifecycleMove:Completed',
-        lifecycle_changed_at_utc = $now,
-        availability = 'Available',
-        last_seen_at_utc = $now
-      WHERE project_id = $id
-      INSERT project_lifecycle_events (...)
-18. journal Completed
-19. best-effort prune empty parent dirs under the source lifecycle
-    (only if directory empty; never prune 01_Active / 02_On-Hold / 03_Archived themselves)
+13–21. **Superseded by §F.5.** Do not insert `result='Completed'` in the catalog transaction. Insert `CatalogCommitted` there; insert `Completed` only after journal `Completed`.
 ```
 
-Failure after step 16 before 17: attempt move back; journal RolledBack or RecoveryRequired; insert event Result=RolledBack/RecoveryRequired if catalog still at source.
+Failure after step 16 before catalog TX: attempt move back; journal RolledBack or RecoveryRequired; insert `RolledBack`/`RecoveryRequired`; never `Completed`.
 
-Failure after 17 before 18: journal RecoveryRequired; **do not** move disk back (catalog already new). Recovery will mark Completed.
+Failure after catalog TX before journal `Completed`: leave `CatalogCommitted`; do not insert `Completed`; do not roll disk back (catalog already new). Recovery S3/S4/S5 marks journal `Completed` then appends `Completed`.
 
 ### 5.7 Import / duplicate interaction
 
@@ -1276,48 +1442,26 @@ No automatic modal storm. Missing count in the status bar is enough; filter `م�
 - Keep existing `lifecycle` values; normalize only truly blank/null to `Active`.
 - Invalid non-empty lifecycle values (not in the three) → **do not auto-map to Quarantine**. Leave the value, set `availability='PathDrift'` on first probe, refuse transitions until repaired. Optionally write `last_operation_status='InvalidLifecycle'`. Do not rewrite the column in migration.
 
-### 6.2 Catalog DDL (target)
+### 6.2 Catalog DDL (target) and **mandatory execution order**
 
-Additive columns on `projects`:
+Run inside `ProjectCatalog.InitializeAsync`, after the WP-2.2 category block, in **one** SQLite transaction. Re-running the whole function must be a no-op on data.
 
-```sql
-ALTER TABLE projects ADD COLUMN availability TEXT NOT NULL DEFAULT 'Unknown';
-ALTER TABLE projects ADD COLUMN last_seen_at_utc TEXT;
-ALTER TABLE projects ADD COLUMN last_backup_at_utc TEXT;
-ALTER TABLE projects ADD COLUMN last_operation_status TEXT;
-ALTER TABLE projects ADD COLUMN lifecycle_changed_at_utc TEXT;
-```
+**Order (do not reorder):**
 
-`EnsureColumnAsync` already used for this style. `NOT NULL DEFAULT` is valid on SQLite ADD COLUMN.
-
-New tables:
+1. `EnsureColumnAsync` on `projects`: `availability`, `last_seen_at_utc`, `last_backup_at_utc`, `last_operation_status`, `lifecycle_changed_at_utc`.
+2. `CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`.
+3. `CREATE TABLE IF NOT EXISTS project_lifecycle_events` as in §F.4 (includes `event_seq INTEGER PRIMARY KEY AUTOINCREMENT`).
+4. `CREATE INDEX IF NOT EXISTS ix_lifecycle_events_project`.
+5. Unique partial indexes from §F.4 (`ux_lifecycle_events_operation_catalog_committed`, `ux_lifecycle_events_operation_terminal`).
+6. **Normalize blanks only** (not unknown non-empty strings, and **no event insert**):
 
 ```sql
-CREATE TABLE IF NOT EXISTS app_meta (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-INSERT OR IGNORE INTO app_meta(key, value) VALUES ('schema_version', '2.3');
--- if present and lower, set to 2.3 at end of successful migration
--- never decrease
-
-CREATE TABLE IF NOT EXISTS project_lifecycle_events (
-    event_id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL,
-    from_lifecycle TEXT NOT NULL,
-    to_lifecycle TEXT NOT NULL,
-    operation_id TEXT,
-    result TEXT NOT NULL,
-    git_status_summary TEXT,
-    availability_at_start TEXT,
-    message TEXT,
-    created_at_utc TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS ix_lifecycle_events_project
-    ON project_lifecycle_events(project_id, created_at_utc);
+UPDATE projects
+SET lifecycle = 'Active'
+WHERE lifecycle IS NULL OR TRIM(lifecycle) = '';
 ```
 
-Triggers (fail closed):
+7. Then create fail-closed triggers (after normalize so a blank `NEW.lifecycle='Active'` is legal):
 
 ```sql
 CREATE TRIGGER IF NOT EXISTS trg_projects_lifecycle_insert
@@ -1335,15 +1479,36 @@ BEGIN
 END;
 ```
 
-**Migration order problem:** if a legacy row already has a weird lifecycle, creating the UPDATE trigger is fine; creating the INSERT trigger is fine; a CHECK on existing rows is not retroactive. Do **not** add a CHECK that would break opening the catalog. Triggers only fire on new writes. Probe code handles legacy weird values.
-
-Normalize blanks:
+8. `schema_version` **last**, never decreased, never as a side effect of event insertion:
 
 ```sql
-UPDATE projects
-SET lifecycle = 'Active'
-WHERE lifecycle IS NULL OR TRIM(lifecycle) = '';
+INSERT OR IGNORE INTO app_meta(key, value) VALUES ('schema_version', '0');
+UPDATE app_meta
+SET value = '2.3'
+WHERE key = 'schema_version'
+  AND value < '2.3';
 ```
+
+String compare `'2.2' < '2.3'` holds. Do not write `2.3` if value is already `'2.3'` or higher (the `<` predicate already no-ops).
+
+**Migration must not:**
+
+- `INSERT` into `project_lifecycle_events` (so a second `InitializeAsync` cannot duplicate history).
+- Rewrite non-empty unknown lifecycle values (`'Quarantine'`, `'archive'`, …). Probe marks `PathDrift`; transitions deny.
+- `DROP TABLE` / `DELETE FROM projects`.
+- Create a CHECK constraint that would abort opening a catalog that already contains garbage lifecycle strings. Triggers apply only to new writes.
+
+Additive columns:
+
+```sql
+ALTER TABLE projects ADD COLUMN availability TEXT NOT NULL DEFAULT 'Unknown';
+ALTER TABLE projects ADD COLUMN last_seen_at_utc TEXT;
+ALTER TABLE projects ADD COLUMN last_backup_at_utc TEXT;
+ALTER TABLE projects ADD COLUMN last_operation_status TEXT;
+ALTER TABLE projects ADD COLUMN lifecycle_changed_at_utc TEXT;
+```
+
+`EnsureColumnAsync` already used for this style. `NOT NULL DEFAULT` is valid on SQLite ADD COLUMN.
 
 Do not create a FOREIGN KEY from events to projects (keep WP-2.2 style; avoid CASCADE). Application inserts events only for known ids.
 
@@ -1381,12 +1546,15 @@ GetProjectsAsync(filter)  // lifecycle, categoryId, availability, text
 GetLifecycleEventsAsync(projectId)
 ```
 
-`UpdateProjectLifecycleAndPathAsync` must:
+`UpdateProjectLifecycleAndPathAsync` / `CommitLifecycleMoveCatalogAsync` must:
 
-- verify lifecycle ∈ allowed
+- verify lifecycle ∈ `{Active, On-Hold, Archived}`
 - verify project exists (exactly 1 row)
 - not change `category_id` / `category`
-- run in a transaction together with the event insert when called from the lifecycle service
+- run in **one** catalog transaction with the `CatalogCommitted` insert only
+- **not** insert `Completed`
+
+`InsertLifecycleEventAsync` is a separate `INSERT OR IGNORE`. Recovery uses it for terminal results after the journal row is already in a terminal state. No method updates or deletes event rows.
 
 ### 6.5 Rollback of the migration itself
 
@@ -1460,6 +1628,8 @@ Assume type `LifecycleMove`, `staging_path=source`, `final_path=dest`.
 | R13 | crash after catalog commit, journal still Running | dest exists, catalog dest | Completed (R3) | Completed |
 | R14 | category rename also interrupted | — | — | rename recovery runs first | — |
 
+Event rows for R1–R14: **§F.6**. R13 in particular appends `Completed` only **after** the journal has been set to `Completed`, and only if a `Completed` row for that `operation_id` does not already exist.
+
 **Never:** `Directory.Delete` of source or dest for `LifecycleMove`.
 
 Generic `ProjectOperationRecoveryService` must `continue` on `LifecycleMove` (and still on CategoryMove/CategoryRename). If this skip is forgotten, the cleaner might treat `01_Active/...` as staging and attempt deletion. That is a **P0 regression test**.
@@ -1487,8 +1657,8 @@ New file `tests/GitManager.Tests/ProjectLifecycleTests.cs`:
 11. `ImportDuplicate_OfArchivedProject_DoesNotClone`
 12. `UnknownLifecycleInWorkspaceService_Throws_NotQuarantine`
 13. `FilterAndSearch_ByLifecycleCategoryAndText` (service/catalog level)
-14. `History_AppendsEvent_OnCompletedTransition`
-15. `Migration_IsIdempotent_PreservesProjectIdsAndLifecycle`
+14. `History_AppendsCatalogCommitted_ThenCompleted_OnHappyPath`
+15. `Migration_IsIdempotent_PreservesProjectIdsAndLifecycle_InsertsNoEvents`
 
 New file `tests/GitManager.Tests/LifecycleMoveRecoveryTests.cs` (crash fixtures like WP-2.2):
 
@@ -1509,6 +1679,21 @@ New file `tests/GitManager.Tests/ProjectAvailabilityTests.cs`:
 
 Keep **all 34** existing tests green.
 
+### 9.1.1 Event-consistency tests (mandatory)
+
+New file `tests/GitManager.Tests/LifecycleEventConsistencyTests.cs`:
+
+| Test | Asserts |
+| --- | --- |
+| `CompletedEvent_IsNotInserted_UntilJournalIsCompleted` | After catalog TX and before `SetState(Completed)`, events = one `CatalogCommitted`, zero `Completed`. After journal `Completed` + event TX: exactly one `Completed`. |
+| `Recovery_DoesNotInsertDuplicateCompleted` | Fixture: dest exists, catalog dest, journal `Running`, one `CatalogCommitted`. Run recovery twice. Journal `Completed`. Events: one `CatalogCommitted`, one `Completed`. |
+| `Recovery_AppendsRecoveryRequired_WhenBothTreesExist` | R6. Zero `Completed`. Exactly one `RecoveryRequired` after two passes. Both trees remain. |
+| `FailedMove_BeforeCatalogCommit_DoesNotInsertCompleted` | Recovery R4 path. Zero `Completed`. Zero `CatalogCommitted`. At most one `RolledBack`. |
+| `PreflightReject_DoesNotInsertCompletedOrCatalogCommitted` | Dest-exists / missing-path deny. No success events. |
+| `JournalCompleteFailure_LeavesCatalogCommitted_NotCompleted` | Catalog TX succeeded; `SetState(Completed)` throws. Events: `CatalogCommitted` only. Next `RecoverAsync`: journal `Completed` + exactly one `Completed`. |
+| `EventOrder_PreservedAcrossCatalogReopen` | Two successful transitions. Reopen catalog. `ORDER BY event_seq`: CC₁, C₁, CC₂, C₂. `event_seq` strictly increasing. |
+| `Migration_SecondInitialize_DoesNotDuplicateEvents` | Seed one `Completed`. `InitializeAsync` twice. Count unchanged. `'Nope'` lifecycle still `'Nope'`. Blank → `Active` with **no** extra event. |
+
 ### 9.2 Manual / Windows acceptance (not CI)
 
 - Archive a real cloned repo with uncommitted edits; confirm files and `git status` identical at new path.
@@ -1527,6 +1712,11 @@ Keep **all 34** existing tests green.
 - [ ] WP-2.2 tests still 34/34; new tests added; Windows CI green on the WP-2.3 branch.
 - [ ] PR is Draft against WP-2.2; `main` untouched; PRs #1–#3 untouched.
 - [ ] Docs: ADR + implementation log + README/roadmap lines for WP-2.3. `IMPLEMENTATION-STATUS.md` updated to stop claiming category CRUD is missing.
+- [ ] No `project_lifecycle_events.result='Completed'` row exists unless the matching journal row is already `Completed`.
+- [ ] Recovery is idempotent on events: second pass inserts zero extra `Completed` / `RecoveryRequired`.
+- [ ] Failed or in-doubt operations never receive a `Completed` event.
+- [ ] Event order (`event_seq`) is unchanged after process restart.
+- [ ] Migration is idempotent, inserts no events, and does not rewrite unknown lifecycle strings.
 
 ### 9.4 Explicit non-acceptance
 
@@ -1535,7 +1725,10 @@ A build that:
 - sets `lifecycle='Archived'` without moving the folder, or
 - copies instead of moving and leaves two working copies, or
 - uses `git bundle` + delete as archive, or
-- maps unknown lifecycle to Quarantine,
+- maps unknown lifecycle to Quarantine, or
+- inserts `result='Completed'` in the same catalog transaction that leaves the journal `Running`, or
+- `UPDATE`s or `DELETE`s lifecycle event rows, or
+- treats `CatalogCommitted` as user-visible success,
 
 **fails the work package** even if CI is green.
 
@@ -1550,7 +1743,7 @@ Implement only:
 - Lifecycle transitions + physical moves + matrix
 - Availability probe + Missing/PathDrift UI
 - Filter + search
-- Lifecycle history table + status bar
+- Lifecycle history table (append-only `CatalogCommitted` then `Completed`, §F) + status bar
 - Journal type `LifecycleMove` + recovery + skip in generic cleaner
 - `WorkspaceService` fail-closed
 - Import duplicate message for archived projects
@@ -1822,7 +2015,10 @@ docs/WP-2.2-IMPLEMENTATION-LOG.md
 | D10 | Quarantine UI out of scope | Accepted |
 | D11 | Shared relocator optional, behavior-identical | Accepted |
 | D12 | Installer is Mission 3, not WP-2.3 | Accepted |
+| D13 | Lifecycle events are append-only Option A: `CatalogCommitted` then `Completed`; never rewrite; `Completed` only after journal `Completed` | Accepted |
+| D14 | Journal `CommitPending` after catalog TX; journal-write failure while disk+catalog agree is R3, not `RecoveryRequired` | Accepted |
+| D15 | Migration order: columns → tables/indexes → normalize blanks → triggers → schema_version; no event inserts; unknown lifecycle left untouched | Accepted |
 
 ---
 
-*End of WP-2.3 technical challenge. No code in this mission. No migration applied. No PR merged.*
+*End of WP-2.3 technical challenge. No product code in this mission. No migration applied. No PR merged. Event-consistency revision is §F.*
