@@ -19,6 +19,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private ProjectCatalog? _catalog;
     private RepositoryImportService? _importer;
     private CategoryManagementService? _categoryManagement;
+    private ProjectCategoryMoveService? _projectCategoryMover;
     private string _newCategoryName = "";
     private string _renameCategoryName = "";
     private string _workspacePath = "";
@@ -40,6 +41,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             RenameCategoryCommand.NotifyCanExecuteChanged();
             DeleteCategoryCommand.NotifyCanExecuteChanged();
+            MoveProjectCommand.NotifyCanExecuteChanged();
         }
     }
     public string NewCategoryName { get => _newCategoryName; set { _newCategoryName = value; OnPropertyChanged(); CreateCategoryCommand.NotifyCanExecuteChanged(); } }
@@ -59,6 +61,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public AsyncRelayCommand CreateCategoryCommand { get; }
     public AsyncRelayCommand RenameCategoryCommand { get; }
     public AsyncRelayCommand DeleteCategoryCommand { get; }
+    public AsyncRelayCommand MoveProjectCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -74,6 +77,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         CreateCategoryCommand = new AsyncRelayCommand(CreateCategoryAsync, () => _categoryManagement is not null && !string.IsNullOrWhiteSpace(NewCategoryName));
         RenameCategoryCommand = new AsyncRelayCommand(RenameCategoryAsync, () => _categoryManagement is not null && !string.IsNullOrWhiteSpace(SelectedCategory) && !string.IsNullOrWhiteSpace(RenameCategoryName));
         DeleteCategoryCommand = new AsyncRelayCommand(DeleteCategoryAsync, () => _categoryManagement is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
+        MoveProjectCommand = new AsyncRelayCommand(MoveSelectedProjectAsync,
+            () => _projectCategoryMover is not null && SelectedProject is not null && !string.IsNullOrWhiteSpace(SelectedCategory));
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
 
@@ -101,24 +106,42 @@ public sealed class MainViewModel : INotifyPropertyChanged
             var catalog = new ProjectCatalog(path);
             await catalog.InitializeAsync();
             _categoryManagement = new CategoryManagementService(catalog);
+            _projectCategoryMover = new ProjectCategoryMoveService(path, catalog, _operationJournal);
             await RefreshCategoriesAsync();
+            var categoryRecovery = await new CategoryMoveRecoveryService(path, catalog, _operationJournal).RecoverAsync();
             var recovery = await _recovery.RecoverAsync();
             _catalog = catalog;
             _importer = new RepositoryImportService(_workspace, catalog, _git, _operationJournal);
             WorkspacePath = Path.GetFullPath(path);
             await _settings.SaveWorkspaceAsync(WorkspacePath);
             await RefreshProjectsAsync();
-            StatusMessage = recovery.RequiresAttention > 0
-                ? $"کتابخانه آماده است؛ {recovery.RequiresAttention} عملیات نیمه‌تمام برای بررسی دستی علامت‌گذاری شد."
-                : recovery.RolledBack > 0
-                    ? $"کتابخانه آماده است؛ {recovery.RolledBack} عملیات ناقص به‌صورت امن بازگردانی شد."
+            StatusMessage = categoryRecovery.RequiresAttention + recovery.RequiresAttention > 0
+                ? $"کتابخانه آماده است؛ {categoryRecovery.RequiresAttention + recovery.RequiresAttention} عملیات برای بررسی دستی علامت‌گذاری شد."
+                : categoryRecovery.RolledBack + recovery.RolledBack > 0
+                    ? $"کتابخانه آماده است؛ {categoryRecovery.RolledBack + recovery.RolledBack} عملیات ناقص به‌صورت امن بازگردانی شد."
                     : "کتابخانه آماده است. مخزن GitHub را برای افزودن وارد کنید.";
             CloneCommand.NotifyCanExecuteChanged();
             CreateCategoryCommand.NotifyCanExecuteChanged();
             RenameCategoryCommand.NotifyCanExecuteChanged();
             DeleteCategoryCommand.NotifyCanExecuteChanged();
+            MoveProjectCommand.NotifyCanExecuteChanged();
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
+    }
+
+    private async Task MoveSelectedProjectAsync()
+    {
+        if (_projectCategoryMover is null || SelectedProject is null) return;
+        try
+        {
+            var category = (await _categoryManagement!.GetCategoriesAsync())
+                .FirstOrDefault(x => x.Name.Equals(SelectedCategory, StringComparison.OrdinalIgnoreCase));
+            if (category is null) throw new InvalidOperationException("دسته‌بندی مقصد پیدا نشد.");
+            var destination = await _projectCategoryMover.MoveProjectAsync(SelectedProject.ProjectId, category.CategoryId);
+            await RefreshProjectsAsync();
+            StatusMessage = $"پروژه با تمام محتویات پوشه‌اش به دسته «{category.Name}» منتقل شد: {destination}";
+        }
+        catch (Exception ex) { StatusMessage = $"انتقال پروژه انجام نشد: {ex.Message}"; }
     }
 
     private async Task RefreshCategoriesAsync()
