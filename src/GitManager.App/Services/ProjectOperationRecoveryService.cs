@@ -23,6 +23,8 @@ public sealed class ProjectOperationRecoveryService
         foreach (var operation in await _journal.GetInterruptedAsync(cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // Category moves have a dedicated recovery routine that reconciles both paths and catalog state.
+            if (operation.OperationType == "CategoryMove") continue;
             if (operation.State == "RecoveryRequired")
             {
                 requiresAttention++;
