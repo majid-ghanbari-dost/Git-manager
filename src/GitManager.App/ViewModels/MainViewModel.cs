@@ -22,7 +22,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<string> Categories { get; } = new() { "Unclassified", "Kandoo", "Business Tools", "Experiments", "Personal", "Client Work" };
     public ObservableCollection<ProjectRecord> Projects { get; } = [];
     public string WorkspacePath { get => _workspacePath; private set { _workspacePath = value; OnPropertyChanged(); } }
-    public string RepositoryUrl { get => _repositoryUrl; set { _repositoryUrl = value; OnPropertyChanged(); } }
+    public string RepositoryUrl { get => _repositoryUrl; set { _repositoryUrl = value; OnPropertyChanged(); CloneCommand.NotifyCanExecuteChanged(); } }
     public string SelectedCategory { get => _selectedCategory; set { _selectedCategory = value; OnPropertyChanged(); } }
     public string StatusMessage { get => _statusMessage; private set { _statusMessage = value; OnPropertyChanged(); } }
     public int ProjectCount => Projects.Count;

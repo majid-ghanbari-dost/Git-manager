@@ -6,6 +6,9 @@ public sealed record GitHubRemote(string Owner, string Repository, string Canoni
     {
         if (!Uri.TryCreate(input.Trim(), UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) ||
+            uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort ||
+            !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment) ||
             !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("فقط نشانی معتبر مخزن در github.com پشتیبانی می‌شود.");
 
