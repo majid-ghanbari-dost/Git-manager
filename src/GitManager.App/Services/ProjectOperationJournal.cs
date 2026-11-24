@@ -14,7 +14,7 @@ public sealed record ProjectOperationEntry(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
-public sealed class ProjectOperationJournal
+public class ProjectOperationJournal
 {
     private readonly string _connectionString;
 
