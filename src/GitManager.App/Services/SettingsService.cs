@@ -13,8 +13,8 @@ public sealed class SettingsService
         if (!File.Exists(_settingsPath)) return null;
         try
         {
-            var settings = await JsonSerializer.DeserializeAsync<AppSettings>(
-                File.OpenRead(_settingsPath));
+            await using var stream = File.OpenRead(_settingsPath);
+            var settings = await JsonSerializer.DeserializeAsync<AppSettings>(stream);
             return settings?.WorkspacePath;
         }
         catch (JsonException) { return null; }

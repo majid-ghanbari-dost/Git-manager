@@ -5,7 +5,6 @@ public sealed record GitHubRemote(string Owner, string Repository, string Canoni
     public static GitHubRemote Parse(string input)
     {
         if (!Uri.TryCreate(input.Trim(), UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) ||
             uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort ||
             !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) ||
             !string.IsNullOrEmpty(uri.Fragment) ||
