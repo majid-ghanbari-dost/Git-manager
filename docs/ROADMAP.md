@@ -11,9 +11,10 @@
 - [x] First-run workspace setup and validation
 - [x] SQLite catalog and initial category seed
 - [x] Initial project inventory and selection
-- [x] Category CRUD, project moves, populated-category rename, and ordering (WP-2.2; lifecycle management remains separate)
-- [x] Recovery journal and interrupted-operation recovery (WP-2.1 implementation; CI validation pending)
-- [ ] CI build and unit tests passing
+- [x] Category CRUD, project moves, populated-category rename, and ordering (WP-2.2)
+- [x] Lifecycle management: Active / On-Hold / Archived physical moves, history, recovery (WP-2.3; not merged)
+- [x] Recovery journal and interrupted-operation recovery (WP-2.1; Windows CI passed on the work branch)
+- [x] CI build and unit tests passing on WP-2.1, WP-2.2, and WP-2.3 work branches (not on `main`)
 
 ## Phase 2 — Repository acquisition
 - [x] GitHub URL validation and canonical identity
@@ -28,7 +29,7 @@
 - [x] Working-tree snapshot including tracked, untracked, and ignored files
 - [x] SHA-256 manifest and backup integrity verification
 - [x] Restore into a new, empty destination with path-traversal checks
-- [ ] Recovery journal and interrupted-backup recovery
+- [x] Recovery journal and interrupted-backup recovery (WP-2.1)
 - [ ] Explicit submodule and Git LFS coverage reporting
 
 ## Phase 4 — Safe publishing
@@ -44,4 +45,4 @@
 - [ ] Windows clean-machine smoke test
 - [ ] Installer and uninstaller
 - [ ] Release notes, checksums, and signed artifacts where feasible
-- [ ] Full source archive, manifest, and SHA-256 handoff
+- [x] Source archive, manifest, and SHA-256 handoff on work-branch CI (not a `main` release)

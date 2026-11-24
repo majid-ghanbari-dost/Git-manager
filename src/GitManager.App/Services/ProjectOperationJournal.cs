@@ -14,7 +14,7 @@ public sealed record ProjectOperationEntry(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
-public sealed class ProjectOperationJournal
+public class ProjectOperationJournal
 {
     private readonly string _connectionString;
 
@@ -90,7 +90,7 @@ public sealed class ProjectOperationJournal
         return entry;
     }
 
-    public async Task SetStateAsync(
+    public virtual async Task SetStateAsync(
         string operationId,
         string state,
         string? error = null,
@@ -138,5 +138,27 @@ public sealed class ProjectOperationJournal
                 DateTime.Parse(reader.GetString(9), null, System.Globalization.DateTimeStyles.RoundtripKind)));
         }
         return result;
+    }
+
+    public async Task<ProjectOperationEntry?> GetAsync(string operationId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT operation_id, operation_type, operation_key, project_id,
+                   staging_path, final_path, state, error, created_at_utc, updated_at_utc
+            FROM project_operations WHERE operation_id = $id
+            """;
+        command.Parameters.AddWithValue("$id", operationId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        return new ProjectOperationEntry(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
+            reader.GetString(4), reader.GetString(5), reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            DateTime.Parse(reader.GetString(8), null, System.Globalization.DateTimeStyles.RoundtripKind),
+            DateTime.Parse(reader.GetString(9), null, System.Globalization.DateTimeStyles.RoundtripKind));
     }
 }

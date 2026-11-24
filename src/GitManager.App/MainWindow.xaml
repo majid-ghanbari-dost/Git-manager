@@ -68,21 +68,36 @@
             </Border>
             <Border Grid.Column="2" Background="White" CornerRadius="9" Padding="16">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
-                        <TextBlock Text="پروژه‌های کتابخانه" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <Button Content="پشتیبان‌گیری + SHA-256" Command="{Binding BackupCommand}" Margin="16,0,0,0" Padding="12,5"/>
-                        <Button Content="انتقال پروژه به دسته انتخاب‌شده" Command="{Binding MoveProjectCommand}" Margin="8,0,0,0" Padding="12,5"/>
-                        <Button Content="بازیابی پشتیبان" Command="{Binding RestoreCommand}" Margin="8,0,0,0" Padding="12,5"/>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="پروژه‌های کتابخانه" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Button Content="پشتیبان‌گیری + SHA-256" Command="{Binding BackupCommand}" Margin="16,0,0,0" Padding="12,5"/>
+                            <Button Content="انتقال پروژه به دسته انتخاب‌شده" Command="{Binding MoveProjectCommand}" Margin="8,0,0,0" Padding="12,5"/>
+                            <Button Content="بازیابی پشتیبان" Command="{Binding RestoreCommand}" Margin="8,0,0,0" Padding="12,5"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="فیلتر وضعیت" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox ItemsSource="{Binding LifecycleFilters}" SelectedItem="{Binding SelectedLifecycleFilter}" Width="140" Padding="6"/>
+                            <TextBlock Text="جست‌وجو" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="180" Padding="6"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="انتقال به فعال" Command="{Binding MoveToActiveCommand}" Padding="10,5" Margin="0,0,6,0"/>
+                            <Button Content="انتقال به معلق" Command="{Binding MoveToOnHoldCommand}" Padding="10,5" Margin="0,0,6,0"/>
+                            <Button Content="بایگانی پروژه" Command="{Binding ArchiveProjectCommand}" Padding="10,5" Margin="0,0,6,0"/>
+                            <Button Content="بازگردانی از بایگانی" Command="{Binding RestoreArchivedCommand}" Padding="10,5"/>
+                        </StackPanel>
                     </StackPanel>
                     <DataGrid ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}" AutoGenerateColumns="False" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                               FlowDirection="RightToLeft" RowHeight="38" SelectionMode="Single">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="پروژه" Binding="{Binding Repository}" Width="*"/>
-                            <DataGridTextColumn Header="مالک" Binding="{Binding Owner}" Width="150"/>
-                            <DataGridTextColumn Header="دسته" Binding="{Binding Category}" Width="110"/>
-                            <DataGridTextColumn Header="وضعیت" Binding="{Binding Lifecycle}" Width="90"/>
-                            <DataGridTextColumn Header="شاخه" Binding="{Binding CurrentBranch}" Width="110"/>
+                            <DataGridTextColumn Header="مالک" Binding="{Binding Owner}" Width="120"/>
+                            <DataGridTextColumn Header="دسته" Binding="{Binding Category}" Width="100"/>
+                            <DataGridTextColumn Header="وضعیت" Binding="{Binding Lifecycle}" Width="80"/>
+                            <DataGridTextColumn Header="دسترسی" Binding="{Binding AvailabilityDisplay}" Width="90"/>
+                            <DataGridTextColumn Header="شاخه" Binding="{Binding CurrentBranch}" Width="90"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>

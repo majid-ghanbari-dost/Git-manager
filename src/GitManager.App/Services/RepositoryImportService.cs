@@ -36,7 +36,8 @@ public sealed class RepositoryImportService
         var existing = (await _catalog.GetProjectsAsync()).FirstOrDefault(p =>
             p.CanonicalRemoteUrl.Equals(remote.CanonicalUrl, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
-            throw new InvalidOperationException("این مخزن قبلاً در کتابخانه ثبت شده است.");
+            throw new InvalidOperationException(
+                $"این مخزن قبلاً در کتابخانه ثبت شده است (وضعیت: {existing.Lifecycle}، مسیر: {existing.ContainerPath}). دوباره Clone نشود.");
 
         var destination = _workspaceService.GetProjectContainer(workspaceRoot, "Active", category,
             remote.Owner, remote.Repository);

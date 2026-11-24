@@ -24,7 +24,7 @@ public sealed class ProjectOperationRecoveryService
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Category moves have a dedicated recovery routine that reconciles both paths and catalog state.
-            if (operation.OperationType is "CategoryMove" or "CategoryRename") continue;
+            if (operation.OperationType is "CategoryMove" or "CategoryRename" or "LifecycleMove") continue;
             if (operation.State == "RecoveryRequired")
             {
                 requiresAttention++;

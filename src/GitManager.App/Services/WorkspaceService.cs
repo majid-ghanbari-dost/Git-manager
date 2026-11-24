@@ -1,3 +1,5 @@
+using GitManager.App.Models;
+
 namespace GitManager.App.Services;
 
 public sealed class WorkspaceService
@@ -14,10 +16,11 @@ public sealed class WorkspaceService
     {
         var lifecycleFolder = lifecycle switch
         {
-            "Active" => "01_Active",
-            "On-Hold" => "02_On-Hold",
-            "Archived" => "03_Archived",
-            _ => "04_Quarantine"
+            LifecycleState.Active => "01_Active",
+            LifecycleState.OnHold => "02_On-Hold",
+            LifecycleState.Archived => "03_Archived",
+            _ => throw new InvalidOperationException(
+                $"وضعیت چرخه عمر «{lifecycle}» نامعتبر است و به قرنطینه نگاشت نمی‌شود.")
         };
         var path = Path.GetFullPath(Path.Combine(root, lifecycleFolder,
             PathSafety.SafeSegment(category), PathSafety.SafeSegment(owner), PathSafety.SafeSegment(repository)));
