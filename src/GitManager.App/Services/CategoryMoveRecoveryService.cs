@@ -27,18 +27,36 @@ public sealed class CategoryMoveRecoveryService(
                 continue;
             }
 
-            IAsyncDisposable lease;
+            var keyParts = operation.OperationKey.Split('|');
+            var projectSnapshot = (await catalog.GetProjectsAsync())
+                .FirstOrDefault(x => x.ProjectId == operation.ProjectId);
+            var categoryIds = keyParts.Length == 4 && keyParts[0] == "category-move"
+                ? new[] { keyParts[1], keyParts[2] }
+                : new[] { projectSnapshot?.CategoryId ?? "", keyParts.Length > 1 ? keyParts[1] : "" };
+            var heldCategoryLeases = new List<IAsyncDisposable>();
             try
             {
-                lease = await _operationLock.AcquireAsync(
-                    "project:" + operation.ProjectId, cancellationToken, TimeSpan.FromMilliseconds(100));
+                foreach (var categoryId in categoryIds.Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal))
+                    heldCategoryLeases.Add(await _operationLock.AcquireAsync(
+                        "category:" + categoryId, cancellationToken, TimeSpan.FromMilliseconds(100)));
             }
             catch (TimeoutException)
             {
-                // Another running Git Manager instance still owns this project operation.
+                for (var i = heldCategoryLeases.Count - 1; i >= 0; i--)
+                    await heldCategoryLeases[i].DisposeAsync();
                 continue;
             }
-            await using var operationLease = lease;
+            await using var categoryLeases = new CompositeLease(heldCategoryLeases);
+
+            IAsyncDisposable projectLease;
+            try
+            {
+                projectLease = await _operationLock.AcquireAsync(
+                    "project:" + operation.ProjectId, cancellationToken, TimeSpan.FromMilliseconds(100));
+            }
+            catch (TimeoutException) { continue; }
+            await using var operationLease = projectLease;
 
             var source = Path.GetFullPath(operation.StagingPath);
             var destination = Path.GetFullPath(operation.FinalPath);
@@ -115,6 +133,14 @@ public sealed class CategoryMoveRecoveryService(
         }
 
         return new CategoryMoveRecoveryReport(rolledBack, completed, attention);
+    }
+
+    private sealed class CompositeLease(List<IAsyncDisposable> leases) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            for (var i = leases.Count - 1; i >= 0; i--) await leases[i].DisposeAsync();
+        }
     }
 
     private static bool CategoryMoveUnsafe(string path) =>
