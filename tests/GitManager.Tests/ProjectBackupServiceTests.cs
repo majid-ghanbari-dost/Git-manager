@@ -55,7 +55,7 @@ public sealed class ProjectBackupServiceTests
             Assert.False(File.Exists(Path.Combine(restoredRepository, "removed.txt")));
             var restoredStatus = await git.RunAsync(restoredRepository, "status", "--short");
             Assert.Contains("?? untracked.txt", restoredStatus);
-            Assert.Contains("D  removed.txt", restoredStatus);
+            Assert.Contains("D removed.txt", restoredStatus);
             Assert.Equal(await git.RunAsync(repository, "rev-parse", "HEAD"),
                 await git.RunAsync(restoredRepository, "rev-parse", "HEAD"));
 
