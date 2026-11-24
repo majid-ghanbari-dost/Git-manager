@@ -14,7 +14,7 @@ public sealed class ProjectCatalog
     {
         var dbPath = Path.Combine(workspaceRoot, "00_Manager", "catalog", "projects.sqlite3");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(dbPath))!);
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = dbPath }.ToString();
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = dbPath, Pooling = false }.ToString();
     }
 
     public async Task InitializeAsync()
