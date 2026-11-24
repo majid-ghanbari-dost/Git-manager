@@ -168,6 +168,13 @@ public sealed class CategoryManagementTests
                         'C:/workspace/01_Active/Legacy Custom/legacy/repo/repository',
                         'main', 'abc123', '2026-01-01T00:00:00.0000000Z'
                     );
+                    INSERT INTO projects VALUES(
+                        'legacy-empty-category', 'https://github.com/legacy/empty.git', 'github.com',
+                        'legacy', 'empty', '', 'Active',
+                        'C:/workspace/01_Active/legacy/empty',
+                        'C:/workspace/01_Active/legacy/empty/repository',
+                        'main', 'def456', '2026-01-01T00:00:00.0000000Z'
+                    );
                     """;
                 await command.ExecuteNonQueryAsync();
             }
@@ -177,12 +184,16 @@ public sealed class CategoryManagementTests
             var categories = await catalog.GetCategoriesAsync();
             Assert.Equal("Unclassified", categories[0].Name);
             var legacyCategory = Assert.Single(categories, x => x.Name == "Legacy Custom");
-            var project = Assert.Single(await catalog.GetProjectsAsync());
+            var projects = await catalog.GetProjectsAsync();
+            var project = Assert.Single(projects, x => x.ProjectId == "legacy-project");
+            var blankCategoryProject = Assert.Single(projects, x => x.ProjectId == "legacy-empty-category");
+            var unclassified = Assert.Single(categories, x => x.Name == "Unclassified");
 
             Assert.False(string.IsNullOrWhiteSpace(legacyCategory.CategoryId));
-            Assert.Equal("legacy-project", project.ProjectId);
             Assert.Equal(legacyCategory.CategoryId, project.CategoryId);
             Assert.Equal("Legacy Custom", project.Category);
+            Assert.Equal(unclassified.CategoryId, blankCategoryProject.CategoryId);
+            Assert.Equal("Unclassified", blankCategoryProject.Category);
 
             await catalog.InitializeAsync();
             Assert.Equal(legacyCategory.CategoryId,
