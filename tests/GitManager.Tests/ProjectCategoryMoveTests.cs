@@ -80,7 +80,8 @@ public sealed class ProjectCategoryMoveTests
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
             var journal = new ProjectOperationJournal(Path.Combine(root, "operations.sqlite3"));
-            var key = $"category-move|{target.CategoryId}|{Uri.EscapeDataString(target.Name)}";
+            var sourceCategory = Assert.Single(await catalog.GetCategoriesAsync(), x => x.Name == "Unclassified");
+            var key = $"category-move|{sourceCategory.CategoryId}|{target.CategoryId}|{Uri.EscapeDataString(target.Name)}";
             var operation = await journal.BeginAsync("CategoryMove", key, project.ProjectId,
                 project.ContainerPath, destination);
             await journal.SetStateAsync(operation.OperationId, "Running");
