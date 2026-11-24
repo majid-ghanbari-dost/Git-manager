@@ -118,6 +118,46 @@ public sealed class CategoryRenameTests
     }
 
     [Fact]
+    public async Task Recovery_RollsBackMoveThatCrashedBeforeCatalogCommit()
+    {
+        var root = NewRoot();
+        try
+        {
+            var catalog = new ProjectCatalog(root);
+            await catalog.InitializeAsync();
+            var category = await catalog.CreateCategoryAsync("Before");
+            var project = await AddProjectAsync(root, catalog, category.Name, "alpha");
+            var newPath = new WorkspaceService().GetProjectContainer(root, "Active", "After", "owner", "alpha");
+            Directory.CreateDirectory(Path.GetDirectoryName(newPath)!);
+
+            var journal = new ProjectOperationJournal(Path.Combine(root, "operations.sqlite3"));
+            var parent = await journal.BeginAsync("CategoryRename",
+                $"category-rename|{category.CategoryId}|Before|After", null, root, root);
+            await journal.SetStateAsync(parent.OperationId, "Running");
+            var child = await journal.BeginAsync("CategoryMove",
+                $"category-move|{category.CategoryId}|{category.CategoryId}|After",
+                project.ProjectId, project.ContainerPath, newPath);
+            await journal.SetStateAsync(child.OperationId, "Running");
+            Directory.Move(project.ContainerPath, newPath);
+
+            var renameReport = await new CategoryRenameRecoveryService(root, catalog, journal,
+                new ProjectOperationLock(Path.Combine(root, "locks"))).RecoverAsync();
+            var moveReport = await new CategoryMoveRecoveryService(root, catalog, journal,
+                new ProjectOperationLock(Path.Combine(root, "locks"))).RecoverAsync();
+
+            Assert.Equal(1, renameReport.RolledBack);
+            Assert.Equal(1, moveReport.RolledBack);
+            Assert.True(Directory.Exists(project.ContainerPath));
+            Assert.False(Directory.Exists(newPath));
+            var saved = Assert.Single(await catalog.GetProjectsAsync());
+            Assert.Equal("Before", saved.Category);
+            Assert.Equal(project.ContainerPath, saved.ContainerPath);
+            Assert.Empty(await journal.GetInterruptedAsync());
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
     public async Task Recovery_FinalizesBatchWhenCategoryRowAndAllProjectPathsAreRenamed()
     {
         var root = NewRoot();
