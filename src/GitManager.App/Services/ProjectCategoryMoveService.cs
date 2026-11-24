@@ -43,7 +43,8 @@ public sealed class ProjectCategoryMoveService(
             _workspaceRoot, project.Lifecycle, project.Category, project.Owner, project.Repository));
         if (!PathSafety.IsWithin(_workspaceRoot, source) || !PathSafety.IsWithin(_workspaceRoot, destination) ||
             !source.Equals(expectedSource, StringComparison.OrdinalIgnoreCase) ||
-            !PathSafety.IsWithin(source, project.RepositoryPath))
+            !Path.GetFullPath(project.RepositoryPath).Equals(
+                Path.Combine(source, "repository"), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("مسیر ثبت‌شده پروژه با ساختار کتابخانه سازگار نیست؛ انتقال خودکار متوقف شد.");
         if (!Directory.Exists(source) || !Directory.Exists(project.RepositoryPath))
             throw new DirectoryNotFoundException("پوشه پروژه یا مخزن Git در مسیر ثبت‌شده پیدا نشد.");
