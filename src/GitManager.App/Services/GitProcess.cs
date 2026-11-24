@@ -4,7 +4,19 @@ namespace GitManager.App.Services;
 
 public sealed class GitProcess
 {
-    public async Task<string> RunAsync(string workingDirectory, params string[] arguments)
+    public Task<string> RunAsync(string workingDirectory, params string[] arguments) =>
+        RunCoreAsync(workingDirectory, CancellationToken.None, arguments);
+
+    public Task<string> RunAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken,
+        params string[] arguments) =>
+        RunCoreAsync(workingDirectory, cancellationToken, arguments);
+
+    private static async Task<string> RunCoreAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken,
+        string[] arguments)
     {
         var start = new ProcessStartInfo("git")
         {
@@ -22,7 +34,8 @@ public sealed class GitProcess
             process.Start();
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(20));
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromMinutes(20));
             await process.WaitForExitAsync(timeout.Token);
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
@@ -33,6 +46,8 @@ public sealed class GitProcess
         catch (OperationCanceledException)
         {
             try { process.Kill(true); } catch { }
+            if (cancellationToken.IsCancellationRequested)
+                throw;
             throw new TimeoutException("زمان مجاز عملیات Git به پایان رسید.");
         }
         catch (System.ComponentModel.Win32Exception)
