@@ -40,12 +40,12 @@ public sealed class ProjectOperationLock
                 {
                     fileLock = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
                 }
-                catch (IOException) when (DateTime.UtcNow - started < waitLimit)
+                catch (IOException)
                 {
+                    if (DateTime.UtcNow - started >= waitLimit)
+                        throw new TimeoutException("قفل بین‌پردازه‌ای پروژه در مهلت مجاز آزاد نشد.");
                     await Task.Delay(100, cancellationToken);
                 }
-                if (DateTime.UtcNow - started >= waitLimit && fileLock is null)
-                    throw new TimeoutException("قفل بین‌پردازه‌ای پروژه در مهلت مجاز آزاد نشد.");
             }
             return new Releaser(gate, fileLock);
         }
