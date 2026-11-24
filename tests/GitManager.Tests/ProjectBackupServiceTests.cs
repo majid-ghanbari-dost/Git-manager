@@ -8,7 +8,7 @@ namespace GitManager.Tests;
 public sealed class ProjectBackupServiceTests
 {
     [Fact]
-    public async Task CreateBackup_StoresGitHistoryAndWorkingTree_AndDetectsTampering()
+    public async Task BackupAndRestore_PreserveHistoryAndWorkingTree_AndDetectTampering()
     {
         var root = Path.Combine(Path.GetTempPath(), "GitManagerBackupTests", Guid.NewGuid().ToString("N"));
         var repository = Path.Combine(root, "project", "repository");
@@ -19,10 +19,10 @@ public sealed class ProjectBackupServiceTests
             await git.RunAsync(repository, "init");
             await git.RunAsync(repository, "config", "user.name", "Git Manager Test");
             await git.RunAsync(repository, "config", "user.email", "git-manager-test@example.invalid");
-            await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "backup test");
-            await File.WriteAllTextAsync(Path.Combine(repository, "untracked.txt"), "untracked content");
+            await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "committed content");
             await git.RunAsync(repository, "add", ".");
             await git.RunAsync(repository, "commit", "-m", "initial");
+            await File.WriteAllTextAsync(Path.Combine(repository, "untracked.txt"), "untracked content");
 
             var project = new ProjectRecord
             {
@@ -33,10 +33,10 @@ public sealed class ProjectBackupServiceTests
                 ContainerPath = Path.Combine(root, "project"),
                 RepositoryPath = repository
             };
-            var service = new ProjectBackupService(git);
-            var backup = await service.CreateBackupAsync(project);
+            var backupService = new ProjectBackupService(git);
+            var backup = await backupService.CreateBackupAsync(project);
 
-            Assert.True(await service.VerifyBackupAsync(backup));
+            Assert.True(await backupService.VerifyBackupAsync(backup));
             using (var archive = ZipFile.OpenRead(Path.Combine(backup, "working-tree.zip")))
             {
                 Assert.Contains(archive.Entries, entry => entry.FullName == "README.md");
@@ -44,8 +44,20 @@ public sealed class ProjectBackupServiceTests
                 Assert.DoesNotContain(archive.Entries, entry => entry.FullName.StartsWith(".git/", StringComparison.OrdinalIgnoreCase));
             }
 
+            var restoreParent = Path.Combine(root, "restores");
+            var restoreService = new ProjectRestoreService(git, backupService);
+            var restoredContainer = await restoreService.RestoreToNewContainerAsync(backup, restoreParent);
+            var restoredRepository = Path.Combine(restoredContainer, "repository");
+            Assert.Equal("committed content", await File.ReadAllTextAsync(Path.Combine(restoredRepository, "README.md")));
+            Assert.Equal("untracked content", await File.ReadAllTextAsync(Path.Combine(restoredRepository, "untracked.txt")));
+            Assert.Contains("?? untracked.txt", await git.RunAsync(restoredRepository, "status", "--short"));
+            Assert.Equal(await git.RunAsync(repository, "rev-parse", "HEAD"),
+                await git.RunAsync(restoredRepository, "rev-parse", "HEAD"));
+
             await File.AppendAllTextAsync(Path.Combine(backup, "repository.bundle"), "tamper");
-            Assert.False(await service.VerifyBackupAsync(backup));
+            Assert.False(await backupService.VerifyBackupAsync(backup));
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => restoreService.RestoreToNewContainerAsync(backup, restoreParent));
         }
         finally
         {
