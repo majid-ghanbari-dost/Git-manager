@@ -6,7 +6,7 @@ A Windows desktop application for organizing, cloning, backing up, restoring, an
 
 ## Current implementation
 
-The first Windows desktop foundation is being developed on `work/phase-1-foundation`. It includes a Persian RTL WPF shell, configurable workspace, SQLite inventory, GitHub URL validation, and a staged full-history clone workflow. It is not yet a production backup or publishing tool.
+The Windows desktop foundation is being developed on `work/phase-1-foundation`. It includes a Persian RTL WPF shell, configurable workspace, SQLite inventory, safe staged full-history clone, verified Git-bundle plus working-tree backup, and restore into a new isolated folder. Publishing, lifecycle/category management, submodule/LFS fidelity, and installer packaging remain incomplete; do not treat this branch as a production release.
 
 See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work and limitations.
 
@@ -36,7 +36,8 @@ See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work an
 - Never store GitHub credentials in SQLite, settings, logs, or manifests.
 - Never execute scripts or hooks automatically after cloning.
 - Preserve full Git history by default.
-- Backups must include a manifest and SHA-256 verification before they can be called complete.
+- Backups include a Git bundle, working-tree snapshot, deletion-state manifest, and SHA-256 verification. Restore verifies the backup and writes only to a new destination.
+- Current backup coverage excludes submodule contents, Git LFS payloads, symlink restoration, and complete filesystem metadata.
 - A Git bundle alone does not preserve uncommitted changes, untracked files, submodule contents, or Git LFS objects; the backup workflow must report and handle these separately.
 
 ## Technology
@@ -47,6 +48,8 @@ See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work an
 - Git Credential Manager or the user's configured Git credential helper
 
 ## Development
+
+Prerequisites: Windows 10/11 x64, .NET 10 SDK for development, and Git for Windows available on `PATH`. The CI artifact is a self-contained portable build; a Setup.exe installer has not yet been produced.
 
 Open `src/GitManager.App/GitManager.App.csproj` in Visual Studio 2026 or build with the .NET 10 SDK on Windows.
 
