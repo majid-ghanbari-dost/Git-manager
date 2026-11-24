@@ -84,6 +84,11 @@ public sealed class ProjectCatalog
             await assign.ExecuteNonQueryAsync();
         }
 
+        var normalizeBlankCategories = connection.CreateCommand();
+        normalizeBlankCategories.Transaction = transaction;
+        normalizeBlankCategories.CommandText = "UPDATE projects SET category = 'Unclassified' WHERE category IS NULL OR TRIM(category) = ''";
+        await normalizeBlankCategories.ExecuteNonQueryAsync();
+
         // Preserve custom legacy category names that may not be in the default seed set.
         var orphaned = connection.CreateCommand();
         orphaned.Transaction = transaction;
@@ -135,6 +140,22 @@ public sealed class ProjectCatalog
             CREATE UNIQUE INDEX IF NOT EXISTS ux_categories_category_id ON categories(category_id);
             CREATE UNIQUE INDEX IF NOT EXISTS ux_categories_name_nocase ON categories(name COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS ix_projects_category_id ON projects(category_id);
+            CREATE TRIGGER IF NOT EXISTS trg_projects_category_insert
+            BEFORE INSERT ON projects
+            WHEN NEW.category_id IS NULL OR NOT EXISTS (
+                SELECT 1 FROM categories WHERE category_id = NEW.category_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'project category_id must reference an existing category');
+            END;
+            CREATE TRIGGER IF NOT EXISTS trg_projects_category_update
+            BEFORE UPDATE OF category_id ON projects
+            WHEN NEW.category_id IS NULL OR NOT EXISTS (
+                SELECT 1 FROM categories WHERE category_id = NEW.category_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'project category_id must reference an existing category');
+            END;
             """;
         await index.ExecuteNonQueryAsync();
         transaction.Commit();
