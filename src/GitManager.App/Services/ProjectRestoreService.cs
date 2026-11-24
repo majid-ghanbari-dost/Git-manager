@@ -31,6 +31,7 @@ public sealed class ProjectRestoreService(GitProcess git, ProjectBackupService b
             await git.RunAsync(staging, "clone", bundle, repository);
             await git.RunAsync(repository, "remote", "set-url", "origin", manifest.CanonicalRemoteUrl);
             await OverlaySnapshotAsync(Path.Combine(backupDirectory, "working-tree.zip"), repository, cancellationToken);
+            ApplyDeletedTrackedFiles(repository, manifest.DeletedTrackedFiles);
 
             Directory.CreateDirectory(Path.Combine(staging, "backups"));
             Directory.CreateDirectory(Path.Combine(staging, "notes"));
@@ -41,6 +42,24 @@ public sealed class ProjectRestoreService(GitProcess git, ProjectBackupService b
         {
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
             throw;
+        }
+    }
+
+    private static void ApplyDeletedTrackedFiles(string repositoryRoot, IEnumerable<string> deletedFiles)
+    {
+        var root = Path.GetFullPath(repositoryRoot);
+        foreach (var relative in deletedFiles)
+        {
+            var segments = relative.Split(new[] { '/', (char)92 });
+            if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative)
+                || segments.Any(part => part is "." or ".."))
+                throw new InvalidDataException("فهرست حذف‌ها شامل مسیر غیرمجاز است.");
+            if (segments[0].Equals(".git", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("فهرست حذف‌ها به فایل‌های داخلی Git اشاره می‌کند.");
+            var target = Path.GetFullPath(Path.Combine(root, relative));
+            if (!PathSafety.IsWithin(root, target))
+                throw new InvalidDataException("مسیر حذف خارج از پوشه بازیابی قرار دارد.");
+            if (File.Exists(target)) File.Delete(target);
         }
     }
 
@@ -75,5 +94,6 @@ public sealed class ProjectRestoreService(GitProcess git, ProjectBackupService b
     private sealed class RestoreManifest
     {
         public string CanonicalRemoteUrl { get; set; } = "";
+        public List<string> DeletedTrackedFiles { get; set; } = [];
     }
 }
