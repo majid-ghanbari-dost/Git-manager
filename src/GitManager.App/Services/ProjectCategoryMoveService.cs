@@ -39,10 +39,14 @@ public sealed class ProjectCategoryMoveService(
         var source = Path.GetFullPath(project.ContainerPath);
         var destination = Path.GetFullPath(_workspace.GetProjectContainer(
             _workspaceRoot, project.Lifecycle, destinationCategoryName, project.Owner, project.Repository));
-        if (!PathSafety.IsWithin(_workspaceRoot, source) || !PathSafety.IsWithin(_workspaceRoot, destination))
-            throw new InvalidOperationException("مسیر مبدأ یا مقصد خارج از کتابخانه است.");
-        if (!Directory.Exists(source))
-            throw new DirectoryNotFoundException("پوشه پروژه در مسیر ثبت‌شده پیدا نشد.");
+        var expectedSource = Path.GetFullPath(_workspace.GetProjectContainer(
+            _workspaceRoot, project.Lifecycle, project.Category, project.Owner, project.Repository));
+        if (!PathSafety.IsWithin(_workspaceRoot, source) || !PathSafety.IsWithin(_workspaceRoot, destination) ||
+            !source.Equals(expectedSource, StringComparison.OrdinalIgnoreCase) ||
+            !PathSafety.IsWithin(source, project.RepositoryPath))
+            throw new InvalidOperationException("مسیر ثبت‌شده پروژه با ساختار کتابخانه سازگار نیست؛ انتقال خودکار متوقف شد.");
+        if (!Directory.Exists(source) || !Directory.Exists(project.RepositoryPath))
+            throw new DirectoryNotFoundException("پوشه پروژه یا مخزن Git در مسیر ثبت‌شده پیدا نشد.");
         if (Directory.Exists(destination) || File.Exists(destination))
             throw new IOException("پوشه مقصد از قبل وجود دارد؛ هیچ فایلی بازنویسی نشد.");
         if (ContainsReparsePoint(source))
