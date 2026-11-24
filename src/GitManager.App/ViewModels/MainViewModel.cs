@@ -111,9 +111,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             _workspace.Initialize(path);
             var catalog = new ProjectCatalog(path);
             await catalog.InitializeAsync();
-            _categoryManagement = new CategoryManagementService(catalog);
+            _categoryManagement = new CategoryManagementService(catalog,
+                new CategoryRenameService(path, catalog, _operationJournal));
             _projectCategoryMover = new ProjectCategoryMoveService(path, catalog, _operationJournal);
             await RefreshCategoriesAsync();
+            var renameRecovery = await new CategoryRenameRecoveryService(path, catalog, _operationJournal).RecoverAsync();
             var categoryRecovery = await new CategoryMoveRecoveryService(path, catalog, _operationJournal).RecoverAsync();
             var recovery = await _recovery.RecoverAsync();
             _catalog = catalog;
@@ -121,10 +123,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
             WorkspacePath = Path.GetFullPath(path);
             await _settings.SaveWorkspaceAsync(WorkspacePath);
             await RefreshProjectsAsync();
-            StatusMessage = categoryRecovery.RequiresAttention + recovery.RequiresAttention > 0
-                ? $"کتابخانه آماده است؛ {categoryRecovery.RequiresAttention + recovery.RequiresAttention} عملیات برای بررسی دستی علامت‌گذاری شد."
-                : categoryRecovery.RolledBack + recovery.RolledBack > 0
-                    ? $"کتابخانه آماده است؛ {categoryRecovery.RolledBack + recovery.RolledBack} عملیات ناقص به‌صورت امن بازگردانی شد."
+            StatusMessage = renameRecovery.RequiresAttention + categoryRecovery.RequiresAttention + recovery.RequiresAttention > 0
+                ? $"کتابخانه آماده است؛ {renameRecovery.RequiresAttention + categoryRecovery.RequiresAttention + recovery.RequiresAttention} عملیات برای بررسی دستی علامت‌گذاری شد."
+                : renameRecovery.RolledBack + categoryRecovery.RolledBack + recovery.RolledBack > 0
+                    ? $"کتابخانه آماده است؛ {renameRecovery.RolledBack + categoryRecovery.RolledBack + recovery.RolledBack} عملیات ناقص به‌صورت امن بازگردانی شد."
                     : "کتابخانه آماده است. مخزن GitHub را برای افزودن وارد کنید.";
             CloneCommand.NotifyCanExecuteChanged();
             CreateCategoryCommand.NotifyCanExecuteChanged();
