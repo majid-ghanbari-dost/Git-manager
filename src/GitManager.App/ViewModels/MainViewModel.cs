@@ -31,7 +31,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<ProjectRecord> Projects { get; } = [];
     public string WorkspacePath { get => _workspacePath; private set { _workspacePath = value; OnPropertyChanged(); } }
     public string RepositoryUrl { get => _repositoryUrl; set { _repositoryUrl = value; OnPropertyChanged(); CloneCommand.NotifyCanExecuteChanged(); } }
-    public string SelectedCategory { get => _selectedCategory; set { _selectedCategory = value; OnPropertyChanged(); } }
+    public string SelectedCategory
+    {
+        get => _selectedCategory;
+        set
+        {
+            _selectedCategory = value;
+            OnPropertyChanged();
+            RenameCategoryCommand.NotifyCanExecuteChanged();
+            DeleteCategoryCommand.NotifyCanExecuteChanged();
+        }
+    }
     public string NewCategoryName { get => _newCategoryName; set { _newCategoryName = value; OnPropertyChanged(); CreateCategoryCommand.NotifyCanExecuteChanged(); } }
     public string RenameCategoryName { get => _renameCategoryName; set { _renameCategoryName = value; OnPropertyChanged(); RenameCategoryCommand.NotifyCanExecuteChanged(); } }
     public string StatusMessage { get => _statusMessage; private set { _statusMessage = value; OnPropertyChanged(); } }
