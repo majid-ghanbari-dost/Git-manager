@@ -1,38 +1,27 @@
-# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.venv/
-venv/
+# .NET
+bin/
+obj/
+.vs/
+TestResults/
+artifacts/
+*.user
+*.suo
 
-# Build outputs
-build/
-dist/
-*.spec
-*.msi
-*.exe
-
-# Local application state and credentials
+# Local state / secrets
 .env
 .env.*
 !.env.example
-*.pem
-*.p12
-*.pfx
-*.key
-id_rsa
-id_ed25519
 *.sqlite3
 *.db
 logs/
 temp/
-.cache/
+*.pem
+*.pfx
+*.p12
+*.key
 
-# IDE and OS
-.vscode/
-.idea/
+# OS / IDE
 .DS_Store
 Thumbs.db
-desktop.ini
+.vscode/
+.idea/

@@ -1,0 +1,17 @@
+namespace GitManager.App.Models;
+
+public sealed class ProjectRecord
+{
+    public string ProjectId { get; set; } = Guid.NewGuid().ToString("N");
+    public string CanonicalRemoteUrl { get; set; } = "";
+    public string Host { get; set; } = "github.com";
+    public string Owner { get; set; } = "";
+    public string Repository { get; set; } = "";
+    public string Category { get; set; } = "Unclassified";
+    public string Lifecycle { get; set; } = "Active";
+    public string ContainerPath { get; set; } = "";
+    public string RepositoryPath { get; set; } = "";
+    public string CurrentBranch { get; set; } = "";
+    public string CurrentCommit { get; set; } = "";
+    public DateTime ImportedAtUtc { get; set; } = DateTime.UtcNow;
+}

@@ -4,27 +4,31 @@
 - [x] Define central workspace and per-project isolation
 - [x] Separate project category from lifecycle
 - [x] Define import, backup, restore, and publish safety rules
-- [ ] Confirm supported Windows baseline and UI framework
+- [x] Select .NET 10 LTS, WPF/MVVM, SQLite, and Git CLI
 
 ## Phase 1 — Foundation
-- [ ] Application shell and Persian RTL interface
-- [ ] First-run workspace setup and validation
-- [ ] SQLite catalog and migrations
-- [ ] Category and lifecycle management
-- [ ] Project inventory and search
+- [x] Application shell and Persian RTL interface
+- [x] First-run workspace setup and validation
+- [x] SQLite catalog and initial category seed
+- [x] Initial project inventory and selection
+- [ ] Category CRUD and lifecycle management
+- [ ] Recovery journal and interrupted-operation recovery
+- [ ] CI build and unit tests passing
 
 ## Phase 2 — Repository acquisition
-- [ ] GitHub URL validation and canonical identity
-- [ ] Authentication through Git Credential Manager
-- [ ] Permission and repository metadata check
-- [ ] Transactional clone through staging
-- [ ] Duplicate detection and safe re-import
+- [x] GitHub URL validation and canonical identity
+- [x] Authentication through configured Git credential helper
+- [x] Staged full-history clone and remote verification
+- [x] Duplicate detection and no-overwrite destination handling
+- [ ] Permission and repository metadata preview
+- [ ] Explicit retry/resume workflow for interrupted clones
 
 ## Phase 3 — Preservation
-- [ ] Full-history Git bundle backup
-- [ ] Working-tree snapshot for uncommitted/untracked files
-- [ ] Manifest and SHA-256 generation/verification
-- [ ] Backup retention and restore to a new location
+- [x] Full-history Git bundle backup
+- [x] Working-tree snapshot including tracked, untracked, and ignored files
+- [x] SHA-256 manifest and backup integrity verification
+- [x] Restore into a new, empty destination with path-traversal checks
+- [ ] Recovery journal and interrupted-backup recovery
 - [ ] Explicit submodule and Git LFS coverage reporting
 
 ## Phase 4 — Safe publishing
@@ -35,9 +39,9 @@
 - [ ] No force push by default
 
 ## Phase 5 — Quality and release
-- [ ] Unit and integration tests
+- [x] Windows CI build and portable self-contained publish workflow
+- [ ] Expanded integration and UI tests
 - [ ] Windows clean-machine smoke test
-- [ ] CI build and test workflow
 - [ ] Installer and uninstaller
 - [ ] Release notes, checksums, and signed artifacts where feasible
 - [ ] Full source archive, manifest, and SHA-256 handoff
