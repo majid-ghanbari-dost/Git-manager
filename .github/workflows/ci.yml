@@ -1,7 +1,7 @@
 name: Windows CI
 on:
   push:
-    branches: [main]
+    branches: [main, 'work/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -22,6 +22,42 @@ jobs:
         run: dotnet test tests/GitManager.Tests/GitManager.Tests.csproj --configuration Release
       - name: Publish portable folder
         run: dotnet publish src/GitManager.App/GitManager.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output artifacts/GitManager-win-x64
+      - name: Create source handoff, manifest, and SHA-256
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $sourceArchive = Join-Path $PWD "artifacts/GitManager-source.zip"
+          $manifest = Join-Path $PWD "artifacts/SOURCE-MANIFEST-SHA256.txt"
+          $handoff = Join-Path $PWD "artifacts/GitManager-WP-2.1-Handoff.zip"
+
+          git archive --format=zip --output="$sourceArchive" HEAD
+          if ($LASTEXITCODE -ne 0) { throw "git archive failed" }
+
+          $manifestEntries = @()
+          foreach ($relativePath in (git ls-files)) {
+            if (-not (Test-Path -LiteralPath $relativePath -PathType Leaf)) {
+              throw "Tracked source file is missing: $relativePath"
+            }
+            $fileHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $relativePath).Hash.ToLowerInvariant()
+            $manifestEntries += "$fileHash  $relativePath"
+          }
+
+          $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceArchive).Hash.ToLowerInvariant()
+          $manifestEntries += "$sourceHash  GitManager-source.zip"
+          Set-Content -LiteralPath $manifest -Value $manifestEntries -Encoding utf8
+          Compress-Archive -Path @($sourceArchive, $manifest) -DestinationPath $handoff -CompressionLevel Optimal -Force
+
+          $handoffHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $handoff).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath "$handoff.sha256" -Value "$handoffHash  GitManager-WP-2.1-Handoff.zip" -Encoding ascii
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: git-manager-wp-2-1-source-handoff
+          path: |
+            artifacts/GitManager-WP-2.1-Handoff.zip
+            artifacts/GitManager-WP-2.1-Handoff.zip.sha256
+          if-no-files-found: error
+
       - uses: actions/upload-artifact@v4
         with:
           name: git-manager-win-x64

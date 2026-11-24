@@ -10,6 +10,8 @@ namespace GitManager.App.ViewModels;
 public sealed class MainViewModel : INotifyPropertyChanged
 {
     private readonly SettingsService _settings = new();
+    private readonly ProjectOperationJournal _operationJournal = new();
+    private readonly ProjectOperationRecoveryService _recovery;
     private readonly WorkspaceService _workspace = new();
     private readonly GitProcess _git = new();
     private readonly ProjectBackupService _backups;
@@ -44,7 +46,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public MainViewModel()
     {
-        _backups = new ProjectBackupService(_git);
+        _recovery = new ProjectOperationRecoveryService(_operationJournal);
+        _backups = new ProjectBackupService(_git, _operationJournal);
         _restores = new ProjectRestoreService(_git, _backups);
         ChangeWorkspaceCommand = new RelayCommand(ChooseWorkspace);
         CloneCommand = new AsyncRelayCommand(CloneAsync, () => _catalog is not null && !string.IsNullOrWhiteSpace(RepositoryUrl));
@@ -76,12 +79,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
             _workspace.Initialize(path);
             var catalog = new ProjectCatalog(path);
             await catalog.InitializeAsync();
+            var recovery = await _recovery.RecoverAsync();
             _catalog = catalog;
-            _importer = new RepositoryImportService(_workspace, catalog, _git);
+            _importer = new RepositoryImportService(_workspace, catalog, _git, _operationJournal);
             WorkspacePath = Path.GetFullPath(path);
             await _settings.SaveWorkspaceAsync(WorkspacePath);
             await RefreshProjectsAsync();
-            StatusMessage = "کتابخانه آماده است. مخزن GitHub را برای افزودن وارد کنید.";
+            StatusMessage = recovery.RequiresAttention > 0
+                ? $"کتابخانه آماده است؛ {recovery.RequiresAttention} عملیات نیمه‌تمام برای بررسی دستی علامت‌گذاری شد."
+                : recovery.RolledBack > 0
+                    ? $"کتابخانه آماده است؛ {recovery.RolledBack} عملیات ناقص به‌صورت امن بازگردانی شد."
+                    : "کتابخانه آماده است. مخزن GitHub را برای افزودن وارد کنید.";
             CloneCommand.NotifyCanExecuteChanged();
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
