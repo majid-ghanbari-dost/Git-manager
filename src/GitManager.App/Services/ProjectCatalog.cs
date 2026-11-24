@@ -327,12 +327,15 @@ public sealed class ProjectCatalog
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
         var category = connection.CreateCommand();
+        category.Transaction = transaction;
         category.CommandText = "SELECT category_id FROM categories WHERE name = $name COLLATE NOCASE";
         category.Parameters.AddWithValue("$name", project.Category);
         var categoryId = await category.ExecuteScalarAsync() as string
             ?? throw new InvalidOperationException("دسته‌بندی انتخاب‌شده دیگر وجود ندارد.");
         var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO projects(project_id, canonical_remote_url, host, owner, repository, category_id, category,
                 lifecycle, container_path, repository_path, current_branch, current_commit, imported_at_utc)
@@ -353,6 +356,7 @@ public sealed class ProjectCatalog
         command.Parameters.AddWithValue("$commit", project.CurrentCommit);
         command.Parameters.AddWithValue("$date", project.ImportedAtUtc.ToString("O"));
         await command.ExecuteNonQueryAsync();
+        transaction.Commit();
         project.CategoryId = categoryId;
     }
 
