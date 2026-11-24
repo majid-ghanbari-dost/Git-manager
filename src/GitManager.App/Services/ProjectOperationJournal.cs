@@ -123,7 +123,7 @@ public sealed class ProjectOperationJournal
             SELECT operation_id, operation_type, operation_key, project_id,
                    staging_path, final_path, state, error, created_at_utc, updated_at_utc
             FROM project_operations
-            WHERE state IN ('Prepared', 'Running', 'CommitPending')
+            WHERE state IN ('Prepared', 'Running', 'CommitPending', 'RecoveryRequired')
             ORDER BY created_at_utc;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
