@@ -8,18 +8,37 @@ public sealed class CategoryMoveRecoveryService(
     ProjectOperationJournal journal)
 {
     private readonly string _workspaceRoot = Path.GetFullPath(workspaceRoot);
+    private readonly ProjectOperationLock _operationLock = new();
 
     public async Task<CategoryMoveRecoveryReport> RecoverAsync(CancellationToken cancellationToken = default)
     {
         var rolledBack = 0;
         var completed = 0;
         var attention = 0;
-        var projects = await catalog.GetProjectsAsync();
-
         foreach (var operation in await journal.GetInterruptedAsync(cancellationToken))
         {
             if (operation.OperationType != "CategoryMove") continue;
             cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(operation.ProjectId))
+            {
+                await journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                    "شناسه پروژه برای بازیابی انتقال موجود نیست؛ مسیرها حفظ شدند.", cancellationToken);
+                attention++;
+                continue;
+            }
+
+            IAsyncDisposable lease;
+            try
+            {
+                lease = await _operationLock.AcquireAsync(
+                    "project:" + operation.ProjectId, cancellationToken, TimeSpan.FromMilliseconds(100));
+            }
+            catch (TimeoutException)
+            {
+                // Another running Git Manager instance still owns this project operation.
+                continue;
+            }
+            await using var operationLease = lease;
 
             var source = Path.GetFullPath(operation.StagingPath);
             var destination = Path.GetFullPath(operation.FinalPath);
@@ -36,7 +55,7 @@ public sealed class CategoryMoveRecoveryService(
             var destinationExists = Directory.Exists(destination);
             if (sourceExists && !destinationExists)
             {
-                var sourceProject = projects.FirstOrDefault(x => x.ProjectId == operation.ProjectId);
+                var sourceProject = (await catalog.GetProjectsAsync()).FirstOrDefault(x => x.ProjectId == operation.ProjectId);
                 if (sourceProject is not null && Path.GetFullPath(sourceProject.ContainerPath)
                     .Equals(source, StringComparison.OrdinalIgnoreCase))
                 {
@@ -55,7 +74,7 @@ public sealed class CategoryMoveRecoveryService(
 
             if (!sourceExists && destinationExists)
             {
-                var project = projects.FirstOrDefault(x => x.ProjectId == operation.ProjectId);
+                var project = (await catalog.GetProjectsAsync()).FirstOrDefault(x => x.ProjectId == operation.ProjectId);
                 if (project is not null && Path.GetFullPath(project.ContainerPath)
                     .Equals(destination, StringComparison.OrdinalIgnoreCase))
                 {
