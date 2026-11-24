@@ -2,24 +2,46 @@ namespace GitManager.App.Services;
 
 public sealed record RecoveryReport(int RolledBack, int RequiresAttention, int AlreadyMissing);
 
-public sealed class ProjectOperationRecoveryService(ProjectOperationJournal journal)
+public sealed class ProjectOperationRecoveryService
 {
+    private readonly ProjectOperationJournal _journal;
+    private readonly ProjectOperationLock _operationLock;
+
+    public ProjectOperationRecoveryService(ProjectOperationJournal journal, ProjectOperationLock? operationLock = null)
+    {
+        _journal = journal;
+        _operationLock = operationLock ?? new ProjectOperationLock();
+    }
+
     public async Task<RecoveryReport> RecoverAsync(CancellationToken cancellationToken = default)
     {
-        await journal.InitializeAsync(cancellationToken);
+        await _journal.InitializeAsync(cancellationToken);
         var rolledBack = 0;
         var requiresAttention = 0;
         var alreadyMissing = 0;
 
-        foreach (var operation in await journal.GetInterruptedAsync(cancellationToken))
+        foreach (var operation in await _journal.GetInterruptedAsync(cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            IAsyncDisposable lease;
+            try
+            {
+                lease = await _operationLock.AcquireAsync(
+                    operation.OperationKey, cancellationToken, TimeSpan.FromMilliseconds(100));
+            }
+            catch (TimeoutException)
+            {
+                // A live process still owns this operation. Never recover its staging directory.
+                continue;
+            }
+
+            await using var operationLease = lease;
             var stagingExists = Directory.Exists(operation.StagingPath) || File.Exists(operation.StagingPath);
             var finalExists = Directory.Exists(operation.FinalPath) || File.Exists(operation.FinalPath);
 
             if (finalExists)
             {
-                await journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
                     "مسیر نهایی وجود دارد؛ برای جلوگیری از حذف داده، بازیابی خودکار انجام نشد.", cancellationToken);
                 requiresAttention++;
                 continue;
@@ -47,8 +69,15 @@ public sealed class ProjectOperationRecoveryService(ProjectOperationJournal jour
                 File.Delete(operation.StagingPath);
 
             await journal.SetStateAsync(operation.OperationId, "RolledBack",
-                "داده‌های staging ناقص پس از بررسی مسیر امن پاک‌سازی شدند؛ پروژهٔ اصلی دست‌نخورده ماند.", cancellationToken);
-            rolledBack++;
+                    "داده‌های staging ناقص پس از بررسی مسیر امن پاک‌سازی شدند؛ پروژهٔ اصلی دست‌نخورده ماند.", cancellationToken);
+                rolledBack++;
+            }
+            catch (Exception ex)
+            {
+                await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                    $"پاک‌سازی staging انجام نشد: {ex.Message}", cancellationToken);
+                requiresAttention++;
+            }
         }
 
         return new RecoveryReport(rolledBack, requiresAttention, alreadyMissing);
