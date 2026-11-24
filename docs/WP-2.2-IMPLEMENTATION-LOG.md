@@ -22,7 +22,7 @@ Merge policy: this PR remains Draft; no merge to `main` or prior phase branches 
 
 ## Release validation
 
-Windows CI has already passed on an intermediate WP-2.2 commit, including build, unit tests, portable Windows x64 publish, and source handoff generation. The final gate is a green CI run on the latest branch head, followed by inspection of the final run's artifacts and SHA-256 values.
+Final Windows CI run 130 passed on the branch head: build, all 34 unit tests, portable Windows x64 publish, source handoff generation, and both artifact uploads. The handoff manifest contains 46 entries; all 46 hashes were independently verified. The inner handoff ZIP SHA-256 is `900705d20f6557cc7376fc740bf8a50aec28f2d3c4a96d033749b0a17be6f0d9`.
 
 ## Explicitly out of scope
 
