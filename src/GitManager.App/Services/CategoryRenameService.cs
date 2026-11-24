@@ -120,8 +120,9 @@ public sealed class CategoryRenameService(
         var normalized = (name ?? "").Trim();
         if (normalized.Length is < 2 or > 48 || normalized.Equals("Unclassified", StringComparison.OrdinalIgnoreCase) ||
             normalized.IndexOfAny(['<', '>', ':', '"', '/', '\\', '|', '?', '*']) >= 0 ||
-            normalized.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || normalized is "." or "..")
-            throw new ArgumentException("نام دسته‌بندی باید ۲ تا ۴۸ نویسه و بدون نویسه غیرمجاز باشد.", nameof(name));
+            normalized.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || normalized is "." or ".." ||
+            !PathSafety.SafeSegment(normalized).Equals(normalized, StringComparison.Ordinal))
+            throw new ArgumentException("نام دسته‌بندی باید ۲ تا ۴۸ نویسه و با قواعد نام‌گذاری پوشه در ویندوز سازگار باشد.", nameof(name));
         return normalized;
     }
 }
