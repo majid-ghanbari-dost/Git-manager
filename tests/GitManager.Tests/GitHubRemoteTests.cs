@@ -1,3 +1,4 @@
+using Xunit;
 using GitManager.App.Services;
 
 namespace GitManager.Tests;
