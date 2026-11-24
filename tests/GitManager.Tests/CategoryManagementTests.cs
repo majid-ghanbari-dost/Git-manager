@@ -109,6 +109,20 @@ public sealed class CategoryManagementTests
     }
 
     [Fact]
+    public async Task Create_RejectsWindowsReservedAndPathNormalizedNames()
+    {
+        var root = NewRoot();
+        try
+        {
+            var catalog = new ProjectCatalog(root);
+            await catalog.InitializeAsync();
+            await Assert.ThrowsAsync<ArgumentException>(() => catalog.CreateCategoryAsync("CON"));
+            await Assert.ThrowsAsync<ArgumentException>(() => catalog.CreateCategoryAsync("Trailing."));
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
     public async Task Reorder_PersistsOrderAndKeepsUnclassifiedPinnedFirst()
     {
         var root = NewRoot();
