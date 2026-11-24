@@ -57,6 +57,7 @@ public sealed class RepositoryImportService
         };
         var operation = await _journal.BeginAsync("Import", lockKey, record.ProjectId, tempRoot, destination, cancellationToken);
 
+        var catalogCommitted = false;
         try
         {
             Directory.CreateDirectory(tempRoot);
@@ -77,6 +78,7 @@ public sealed class RepositoryImportService
             try
             {
                 await _catalog.AddProjectAsync(record);
+                catalogCommitted = true;
             }
             catch
             {
@@ -89,17 +91,25 @@ public sealed class RepositoryImportService
         }
         catch (Exception ex)
         {
-            try
-            {
-                if (Directory.Exists(destination) && !Directory.Exists(tempRoot))
-                    Directory.Move(destination, tempRoot);
-                if (Directory.Exists(tempRoot)) Directory.Delete(tempRoot, recursive: true);
-                await _journal.SetStateAsync(operation.OperationId, "RolledBack", ex.Message, CancellationToken.None);
-            }
-            catch (Exception cleanupError)
+            if (catalogCommitted || (Directory.Exists(destination) && !Directory.Exists(tempRoot)))
             {
                 await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
-                    $"{ex.Message} | بازگردانی staging ناموفق بود: {cleanupError.Message}", CancellationToken.None);
+                    "پوشه نهایی ایجاد شده است؛ برای جلوگیری از حذف پروژه، داده حفظ شد و بررسی لازم است.", CancellationToken.None);
+            }
+            else
+            {
+                try
+                {
+                    if (Directory.Exists(destination) && !Directory.Exists(tempRoot))
+                        Directory.Move(destination, tempRoot);
+                    if (Directory.Exists(tempRoot)) Directory.Delete(tempRoot, recursive: true);
+                    await _journal.SetStateAsync(operation.OperationId, "RolledBack", ex.Message, CancellationToken.None);
+                }
+                catch (Exception cleanupError)
+                {
+                    await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                        $"{ex.Message} | بازگردانی staging ناموفق بود: {cleanupError.Message}", CancellationToken.None);
+                }
             }
             throw;
         }
