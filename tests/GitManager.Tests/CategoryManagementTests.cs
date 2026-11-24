@@ -36,7 +36,7 @@ public sealed class CategoryManagementTests
 
             var created = await service.CreateAsync("Research");
             await service.RenameAsync(created.CategoryId, "Research Lab");
-            var renamed = Assert.Single((await service.GetCategoriesAsync()).Where(x => x.CategoryId == created.CategoryId));
+            var renamed = Assert.Single(await service.GetCategoriesAsync(), x => x.CategoryId == created.CategoryId);
             Assert.Equal("Research Lab", renamed.Name);
             Assert.Equal(created.CategoryId, renamed.CategoryId);
 
@@ -68,7 +68,7 @@ public sealed class CategoryManagementTests
         {
             var catalog = new ProjectCatalog(root);
             await catalog.InitializeAsync();
-            var unclassified = Assert.Single((await catalog.GetCategoriesAsync()).Where(x => x.Name == "Unclassified"));
+            var unclassified = Assert.Single(await catalog.GetCategoriesAsync(), x => x.Name == "Unclassified");
 
             await Assert.ThrowsAsync<InvalidOperationException>(
                 () => catalog.RenameEmptyCategoryAsync(unclassified.CategoryId, "Misc"));
