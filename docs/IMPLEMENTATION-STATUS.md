@@ -1,28 +1,30 @@
 # Implementation status
 
-## Phase 1 foundation — in progress
+## Implemented on `work/phase-1-foundation`
 
-Implemented on branch `work/phase-1-foundation`:
-
-- WPF desktop shell with Persian right-to-left layout.
+- Persian RTL WPF desktop shell.
 - First-run workspace selection and persisted workspace path (Local AppData; no credentials).
-- Workspace folder initialization.
-- SQLite project catalog and starter category seed.
+- Workspace folder initialization and SQLite project catalog.
 - GitHub HTTPS repository URL validation and canonical identity.
-- Safe process invocation through Git's argument list (no shell interpolation).
+- Safe Git process invocation without shell interpolation.
 - Full-history clone into a staging directory, remote verification, and no-overwrite destination handling.
-- Initial project inventory grid.
-- Windows CI build and portable self-contained publish workflow.
-- Unit tests for repository URL parsing and Windows path normalization.
+- Initial project inventory with project selection.
+- Per-project backup creation:
+  - Full Git history and refs saved as a verified Git bundle.
+  - Working-tree snapshot includes tracked, untracked, and ignored files.
+  - The .git internals are excluded from the snapshot; Git history is retained in the bundle.
+  - SHA-256 hashes are recorded in a JSON manifest and checked after creation.
+  - Backup is staged and atomically moved into its final directory.
+- Automated test covers backup contents and SHA-256 tamper detection.
+- Windows CI builds, runs tests, and publishes a self-contained win-x64 portable output.
 
-## Known limitations — not yet release-ready
+## Not yet release-ready
 
-- Backup and restore engines are not implemented.
+- Restore from backup into a new destination is not implemented.
 - Recovery journal and crash recovery are not implemented.
-- Category CRUD and lifecycle moves are not implemented; initial categories are seeded.
+- Category CRUD and lifecycle moves are not implemented.
 - Publish, diff review, secret scanning, and push confirmation are not implemented.
-- Submodule and Git LFS backup coverage is not implemented.
+- Submodule and Git LFS backup coverage is not implemented and must be reported/handled before claiming full fidelity.
 - Installer, signing, and clean-machine validation are pending.
-- CI must pass before this phase is accepted.
 
-The branch is intentionally not merged into `main`. Do not use this build as a production backup or publishing tool.
+Backups currently protect repository history and ordinary working-tree files, but do not claim to preserve submodule contents, LFS payloads, or all filesystem metadata. The branch is intentionally not merged into `main`.
