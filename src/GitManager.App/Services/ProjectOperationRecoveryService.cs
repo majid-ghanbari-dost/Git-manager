@@ -23,6 +23,11 @@ public sealed class ProjectOperationRecoveryService
         foreach (var operation in await _journal.GetInterruptedAsync(cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (operation.State == "RecoveryRequired")
+            {
+                requiresAttention++;
+                continue;
+            }
             IAsyncDisposable lease;
             try
             {
