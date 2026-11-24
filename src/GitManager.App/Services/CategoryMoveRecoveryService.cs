@@ -5,10 +5,11 @@ public sealed record CategoryMoveRecoveryReport(int RolledBack, int Completed, i
 public sealed class CategoryMoveRecoveryService(
     string workspaceRoot,
     ProjectCatalog catalog,
-    ProjectOperationJournal journal)
+    ProjectOperationJournal journal,
+    ProjectOperationLock? operationLock = null)
 {
     private readonly string _workspaceRoot = Path.GetFullPath(workspaceRoot);
-    private readonly ProjectOperationLock _operationLock = new();
+    private readonly ProjectOperationLock _operationLock = operationLock ?? new ProjectOperationLock();
 
     public async Task<CategoryMoveRecoveryReport> RecoverAsync(CancellationToken cancellationToken = default)
     {
