@@ -9,6 +9,6 @@
     <AssemblyName>GitManager</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
   </ItemGroup>
 </Project>
