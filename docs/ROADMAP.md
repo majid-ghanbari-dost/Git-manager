@@ -27,7 +27,7 @@
 - [x] Full-history Git bundle backup
 - [x] Working-tree snapshot including tracked, untracked, and ignored files
 - [x] SHA-256 manifest and backup integrity verification
-- [ ] Restore into a new, empty destination
+- [x] Restore into a new, empty destination with path-traversal checks
 - [ ] Recovery journal and interrupted-backup recovery
 - [ ] Explicit submodule and Git LFS coverage reporting
 
