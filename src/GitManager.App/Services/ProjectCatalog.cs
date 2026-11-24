@@ -46,7 +46,7 @@ public sealed class ProjectCatalog
             """;
         await command.ExecuteNonQueryAsync();
 
-        await using var transaction = await connection.BeginTransactionAsync();
+        using var transaction = connection.BeginTransaction();
         await EnsureColumnAsync(connection, transaction, "categories", "category_id", "TEXT");
         await EnsureColumnAsync(connection, transaction, "categories", "is_system", "INTEGER NOT NULL DEFAULT 0");
         await EnsureColumnAsync(connection, transaction, "categories", "sort_order", "INTEGER NOT NULL DEFAULT 0");
@@ -132,7 +132,7 @@ public sealed class ProjectCatalog
             CREATE INDEX IF NOT EXISTS ix_projects_category_id ON projects(category_id);
             """;
         await index.ExecuteNonQueryAsync();
-        await transaction.CommitAsync();
+        transaction.Commit();
     }
 
     private static async Task EnsureColumnAsync(
@@ -147,7 +147,7 @@ public sealed class ProjectCatalog
         while (await reader.ReadAsync())
             if (reader.GetString(1).Equals(column, StringComparison.OrdinalIgnoreCase))
                 exists = true;
-        await reader.CloseAsync();
+        reader.Close();
         if (exists) return;
 
         var alter = connection.CreateCommand();
@@ -204,7 +204,7 @@ public sealed class ProjectCatalog
         var normalized = ValidateCategoryName(newName);
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
+        using var transaction = connection.BeginTransaction();
         var lookup = connection.CreateCommand();
         lookup.Transaction = transaction;
         lookup.CommandText = "SELECT name, is_system FROM categories WHERE category_id = $id";
@@ -235,14 +235,14 @@ public sealed class ProjectCatalog
         try { await update.ExecuteNonQueryAsync(); }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
         { throw new InvalidOperationException("دسته‌بندی با این نام از قبل وجود دارد.", ex); }
-        await transaction.CommitAsync();
+        transaction.Commit();
     }
 
     public async Task DeleteEmptyCategoryAsync(string categoryId)
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
+        using var transaction = connection.BeginTransaction();
         var lookup = connection.CreateCommand();
         lookup.Transaction = transaction;
         lookup.CommandText = "SELECT name, is_system FROM categories WHERE category_id = $id";
@@ -268,7 +268,7 @@ public sealed class ProjectCatalog
         delete.Parameters.AddWithValue("$id", categoryId);
         if (await delete.ExecuteNonQueryAsync() != 1)
             throw new InvalidOperationException("دسته‌بندی دارای پروژه است یا قبلاً حذف شده؛ هیچ داده‌ای حذف نشد.");
-        await transaction.CommitAsync();
+        transaction.Commit();
     }
 
     public async Task<List<ProjectRecord>> GetProjectsAsync()
