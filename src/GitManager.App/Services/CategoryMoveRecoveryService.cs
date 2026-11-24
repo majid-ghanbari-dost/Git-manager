@@ -31,6 +31,10 @@ public sealed class CategoryMoveRecoveryService(
             var keyParts = operation.OperationKey.Split('|');
             var projectSnapshot = (await catalog.GetProjectsAsync())
                 .FirstOrDefault(x => x.ProjectId == operation.ProjectId);
+            var operationPathsWithinWorkspace = PathSafety.IsWithin(_workspaceRoot, operation.StagingPath) &&
+                PathSafety.IsWithin(_workspaceRoot, operation.FinalPath);
+            if (!operationPathsWithinWorkspace && projectSnapshot is null)
+                continue; // Ignore journal entries belonging to another workspace.
             var categoryIds = keyParts.Length == 4 && keyParts[0] == "category-move"
                 ? new[] { keyParts[1], keyParts[2] }
                 : new[] { projectSnapshot?.CategoryId ?? "", keyParts.Length > 1 ? keyParts[1] : "" };
