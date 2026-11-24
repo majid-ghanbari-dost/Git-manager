@@ -51,7 +51,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ProjectRecord? SelectedProject
     {
         get => _selectedProject;
-        set { _selectedProject = value; OnPropertyChanged(); BackupCommand.NotifyCanExecuteChanged(); }
+        set
+        {
+            _selectedProject = value;
+            OnPropertyChanged();
+            BackupCommand.NotifyCanExecuteChanged();
+            MoveProjectCommand.NotifyCanExecuteChanged();
+        }
     }
 
     public RelayCommand ChangeWorkspaceCommand { get; }
