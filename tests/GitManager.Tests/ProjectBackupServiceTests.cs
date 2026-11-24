@@ -20,8 +20,10 @@ public sealed class ProjectBackupServiceTests
             await git.RunAsync(repository, "config", "user.name", "Git Manager Test");
             await git.RunAsync(repository, "config", "user.email", "git-manager-test@example.invalid");
             await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "committed content");
+            await File.WriteAllTextAsync(Path.Combine(repository, "removed.txt"), "this file is deleted before backup");
             await git.RunAsync(repository, "add", ".");
             await git.RunAsync(repository, "commit", "-m", "initial");
+            File.Delete(Path.Combine(repository, "removed.txt"));
             await File.WriteAllTextAsync(Path.Combine(repository, "untracked.txt"), "untracked content");
 
             var project = new ProjectRecord
@@ -50,7 +52,10 @@ public sealed class ProjectBackupServiceTests
             var restoredRepository = Path.Combine(restoredContainer, "repository");
             Assert.Equal("committed content", await File.ReadAllTextAsync(Path.Combine(restoredRepository, "README.md")));
             Assert.Equal("untracked content", await File.ReadAllTextAsync(Path.Combine(restoredRepository, "untracked.txt")));
-            Assert.Contains("?? untracked.txt", await git.RunAsync(restoredRepository, "status", "--short"));
+            Assert.False(File.Exists(Path.Combine(restoredRepository, "removed.txt")));
+            var restoredStatus = await git.RunAsync(restoredRepository, "status", "--short");
+            Assert.Contains("?? untracked.txt", restoredStatus);
+            Assert.Contains("D  removed.txt", restoredStatus);
             Assert.Equal(await git.RunAsync(repository, "rev-parse", "HEAD"),
                 await git.RunAsync(restoredRepository, "rev-parse", "HEAD"));
 
