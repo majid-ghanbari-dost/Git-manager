@@ -13,6 +13,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly WorkspaceService _workspace = new();
     private readonly GitProcess _git = new();
     private readonly ProjectBackupService _backups;
+    private readonly ProjectRestoreService _restores;
     private ProjectCatalog? _catalog;
     private RepositoryImportService? _importer;
     private string _workspacePath = "";
@@ -37,15 +38,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand ChangeWorkspaceCommand { get; }
     public AsyncRelayCommand CloneCommand { get; }
     public AsyncRelayCommand BackupCommand { get; }
+    public AsyncRelayCommand RestoreCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public MainViewModel()
     {
         _backups = new ProjectBackupService(_git);
+        _restores = new ProjectRestoreService(_git, _backups);
         ChangeWorkspaceCommand = new RelayCommand(ChooseWorkspace);
         CloneCommand = new AsyncRelayCommand(CloneAsync, () => _catalog is not null && !string.IsNullOrWhiteSpace(RepositoryUrl));
         BackupCommand = new AsyncRelayCommand(BackupSelectedAsync, () => SelectedProject is not null);
+        RestoreCommand = new AsyncRelayCommand(RestoreBackupAsync);
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
 
@@ -110,6 +114,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 : "پشتیبان ساخته شد، اما بررسی صحت آن موفق نبود؛ آن را قابل اتکا تلقی نکنید.";
         }
         catch (Exception ex) { StatusMessage = $"تهیه پشتیبان ناموفق بود: {ex.Message}"; }
+    }
+
+    private async Task RestoreBackupAsync()
+    {
+        var backupDialog = new OpenFolderDialog { Title = "پوشه پشتیبان (شامل manifest.json) را انتخاب کنید", Multiselect = false };
+        if (backupDialog.ShowDialog() != true) return;
+        var destinationDialog = new OpenFolderDialog { Title = "پوشه والد برای بازیابی پروژه را انتخاب کنید", Multiselect = false };
+        if (destinationDialog.ShowDialog() != true) return;
+        try
+        {
+            StatusMessage = "در حال بررسی SHA-256 و بازیابی در یک پوشه جدید...";
+            var restored = await _restores.RestoreToNewContainerAsync(backupDialog.FolderName, destinationDialog.FolderName);
+            StatusMessage = $"بازیابی با موفقیت انجام شد؛ نسخه اصلی دست‌نخورده باقی ماند: {restored}";
+        }
+        catch (Exception ex) { StatusMessage = $"بازیابی ناموفق بود: {ex.Message}"; }
     }
 
     private async Task RefreshProjectsAsync()
