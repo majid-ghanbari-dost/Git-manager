@@ -85,6 +85,8 @@ public sealed class CategoryRenameRecoveryService(
                         _workspaceRoot, project.Lifecycle, oldName, project.Owner, project.Repository));
                     return Path.GetFullPath(project.ContainerPath).Equals(expected, StringComparison.OrdinalIgnoreCase)
                         && Directory.Exists(expected) && !Directory.Exists(oldPath)
+                        && Path.GetFullPath(project.RepositoryPath).Equals(
+                            Path.Combine(expected, "repository"), StringComparison.OrdinalIgnoreCase)
                         && !ProjectCategoryMoveService.ContainsReparsePoint(expected)
                         && !ProjectCategoryMoveService.ContainsReparsePoint(oldPath);
                 });
@@ -120,6 +122,12 @@ public sealed class CategoryRenameRecoveryService(
                 var newPath = Path.GetFullPath(_workspace.GetProjectContainer(
                     _workspaceRoot, project.Lifecycle, newName, project.Owner, project.Repository));
                 var currentPath = Path.GetFullPath(project.ContainerPath);
+                if (!Path.GetFullPath(project.RepositoryPath).Equals(
+                    Path.Combine(currentPath, "repository"), StringComparison.OrdinalIgnoreCase))
+                {
+                    ambiguous = true;
+                    break;
+                }
                 if (currentPath.Equals(oldPath, StringComparison.OrdinalIgnoreCase) &&
                     Directory.Exists(oldPath) && !Directory.Exists(newPath))
                     continue;
@@ -172,8 +180,7 @@ public sealed class CategoryRenameRecoveryService(
                     Directory.CreateDirectory(Path.GetDirectoryName(item.OldPath)!);
                     if (item.MoveDirectory)
                         Directory.Move(item.NewPath, item.OldPath);
-                    var repositoryPath = Path.Combine(item.OldPath,
-                        Path.GetRelativePath(item.NewPath, item.Project.RepositoryPath));
+                    var repositoryPath = Path.Combine(item.OldPath, "repository");
                     await catalog.UpdateProjectCategoryAndPathAsync(item.Project.ProjectId,
                         categoryId, oldName, item.OldPath, repositoryPath);
                 }
