@@ -3,11 +3,31 @@ using System.Text.Json;
 
 namespace GitManager.App.Services;
 
-public sealed class ProjectRestoreService(GitProcess git, ProjectBackupService backups)
+public sealed class ProjectRestoreService
 {
-    public async Task<string> RestoreToNewContainerAsync(string backupDirectory, string destinationParent, CancellationToken cancellationToken = default)
+    private readonly GitProcess _git;
+    private readonly ProjectBackupService _backups;
+    private readonly ProjectOperationJournal _journal;
+    private readonly ProjectOperationLock _operationLock;
+
+    public ProjectRestoreService(
+        GitProcess git,
+        ProjectBackupService backups,
+        ProjectOperationJournal? journal = null,
+        ProjectOperationLock? operationLock = null)
     {
-        if (!await backups.VerifyBackupAsync(backupDirectory, cancellationToken))
+        _git = git;
+        _backups = backups;
+        _journal = journal ?? new ProjectOperationJournal();
+        _operationLock = operationLock ?? new ProjectOperationLock();
+    }
+
+    public async Task<string> RestoreToNewContainerAsync(
+        string backupDirectory,
+        string destinationParent,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await _backups.VerifyBackupAsync(backupDirectory, cancellationToken))
             throw new InvalidOperationException("اعتبار پشتیبان یا SHA-256 آن تأیید نشد؛ بازیابی متوقف شد.");
 
         var manifest = JsonSerializer.Deserialize<RestoreManifest>(
@@ -23,24 +43,41 @@ public sealed class ProjectRestoreService(GitProcess git, ProjectBackupService b
         if (Directory.Exists(destination) || File.Exists(destination))
             throw new IOException("مسیر مقصد از قبل وجود دارد.");
 
+        var lockKey = "restore:" + Path.GetFullPath(backupDirectory);
+        await using var lease = await _operationLock.AcquireAsync(lockKey, cancellationToken);
+        var operation = await _journal.BeginAsync("Restore", lockKey, manifest.ProjectId, staging, destination, cancellationToken);
         Directory.CreateDirectory(staging);
         try
         {
+            await _journal.SetStateAsync(operation.OperationId, "Running", cancellationToken: cancellationToken);
             var repository = Path.Combine(staging, "repository");
             var bundle = Path.Combine(backupDirectory, "repository.bundle");
-            await git.RunAsync(staging, "clone", bundle, repository);
-            await git.RunAsync(repository, "remote", "set-url", "origin", manifest.CanonicalRemoteUrl);
+            await _git.RunAsync(staging, cancellationToken, "clone", bundle, repository);
+            await _git.RunAsync(repository, cancellationToken, "remote", "set-url", "origin", manifest.CanonicalRemoteUrl);
             await OverlaySnapshotAsync(Path.Combine(backupDirectory, "working-tree.zip"), repository, cancellationToken);
             ApplyDeletedTrackedFiles(repository, manifest.DeletedTrackedFiles);
 
             Directory.CreateDirectory(Path.Combine(staging, "backups"));
             Directory.CreateDirectory(Path.Combine(staging, "notes"));
+            await _journal.SetStateAsync(operation.OperationId, "CommitPending", cancellationToken: cancellationToken);
             Directory.Move(staging, destination);
+            await _journal.SetStateAsync(operation.OperationId, "Completed", cancellationToken: cancellationToken);
             return destination;
         }
-        catch
+        catch (Exception ex)
         {
-            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+            try
+            {
+                if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+                await _journal.SetStateAsync(operation.OperationId,
+                    Directory.Exists(destination) ? "RecoveryRequired" : "RolledBack",
+                    ex.Message, CancellationToken.None);
+            }
+            catch (Exception cleanupError)
+            {
+                await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                    $"{ex.Message} | پاک‌سازی staging ناموفق بود: {cleanupError.Message}", CancellationToken.None);
+            }
             throw;
         }
     }
@@ -93,6 +130,7 @@ public sealed class ProjectRestoreService(GitProcess git, ProjectBackupService b
 
     private sealed class RestoreManifest
     {
+        public string ProjectId { get; set; } = "";
         public string CanonicalRemoteUrl { get; set; } = "";
         public List<string> DeletedTrackedFiles { get; set; } = [];
     }
