@@ -76,9 +76,11 @@ public sealed class ProjectOperationRecoveryTests
         var operationLock = new ProjectOperationLock(root);
         try
         {
-            await using var first = await operationLock.AcquireAsync("project:one");
-            await Assert.ThrowsAsync<TimeoutException>(
-                () => operationLock.AcquireAsync("project:one", timeout: TimeSpan.FromMilliseconds(50)));
+            await using (var first = await operationLock.AcquireAsync("project:one"))
+            {
+                await Assert.ThrowsAsync<TimeoutException>(
+                    () => operationLock.AcquireAsync("project:one", timeout: TimeSpan.FromMilliseconds(50)));
+            }
         }
         finally
         {
