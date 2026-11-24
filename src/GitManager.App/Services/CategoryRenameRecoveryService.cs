@@ -105,7 +105,7 @@ public sealed class CategoryRenameRecoveryService(
                 continue;
             }
 
-            var rollbackPlan = new List<(ProjectRecord Project, string OldPath, string NewPath)>();
+            var rollbackPlan = new List<(ProjectRecord Project, string OldPath, string NewPath, bool MoveDirectory)>();
             var ambiguous = false;
             foreach (var project in projects)
             {
@@ -123,7 +123,16 @@ public sealed class CategoryRenameRecoveryService(
                     PathSafety.IsWithin(_workspaceRoot, newPath) &&
                     !ProjectCategoryMoveService.ContainsReparsePoint(newPath))
                 {
-                    rollbackPlan.Add((project, oldPath, newPath));
+                    rollbackPlan.Add((project, oldPath, newPath, true));
+                    continue;
+                }
+                if (currentPath.Equals(newPath, StringComparison.OrdinalIgnoreCase) &&
+                    !Directory.Exists(newPath) && Directory.Exists(oldPath) &&
+                    PathSafety.IsWithin(_workspaceRoot, oldPath) &&
+                    !ProjectCategoryMoveService.ContainsReparsePoint(oldPath))
+                {
+                    // A previous recovery already moved the directory but crashed before catalog update.
+                    rollbackPlan.Add((project, oldPath, newPath, false));
                     continue;
                 }
                 ambiguous = true;
@@ -143,7 +152,8 @@ public sealed class CategoryRenameRecoveryService(
                 foreach (var item in rollbackPlan)
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(item.OldPath)!);
-                    Directory.Move(item.NewPath, item.OldPath);
+                    if (item.MoveDirectory)
+                        Directory.Move(item.NewPath, item.OldPath);
                     var repositoryPath = Path.Combine(item.OldPath,
                         Path.GetRelativePath(item.NewPath, item.Project.RepositoryPath));
                     await catalog.UpdateProjectCategoryAndPathAsync(item.Project.ProjectId,
