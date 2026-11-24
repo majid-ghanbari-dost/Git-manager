@@ -15,7 +15,9 @@ Merge policy: Draft PR into WP-2.4 only. No merge to `main`. Prior work-package 
 
 ## Release validation
 
-Windows CI run [45386246393](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45386246393) on `a65cfe4ebb232e5a9aad6d6f68c6f7d88ae8ec82` succeeded: unit tests (including journal bootstrap, empty SQLite, upgrade without data loss, scripted Clone registration, and a real public `octocat/Hello-World` clone), self-contained publish, Inno Setup compile, portable ZIP, SHA-256, source handoff, and install/repair/upgrade/uninstall smoke. Pull request run [45386272862](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45386272862) on the same commit also succeeded. This is not a Product Owner clean-machine test and not a signed production release.
+Windows CI run [45386246393](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45386246393) on `a65cfe4ebb232e5a9aad6d6f68c6f7d88ae8ec82` succeeded for the initial bootstrap.
+
+Review follow-up Windows CI run [45388706337](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45388706337) on `c90fff3038c64fbc3ac919f5f8de17ad66971a82` succeeded: full unit test suite (WP-2.1 through WP-2.5.1, including corrupt SQLite, Clone fail-closed, credential-boundary tests, and the real public `octocat/Hello-World` clone), self-contained publish, Inno Setup compile, portable ZIP, SHA-256, source handoff, and install/repair/upgrade/uninstall smoke. Pull request run [45388716073](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45388716073) on the same commit also succeeded. This is not a Product Owner clean-machine test and not a signed production release.
 
 ## Not claimed
 

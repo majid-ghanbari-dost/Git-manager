@@ -55,7 +55,7 @@ Windows CI run `45365248926` on `eb434a9` succeeded, including installer smoke. 
 - Clone enables when the library is open, the journal can record an operation, and a GitHub URL is present; a corrupt journal disables Clone with a Persian reason and does not create a partial project.
 - Tests cover fresh install, empty SQLite, corrupt SQLite, upgrade without data loss, scripted Clone registration, a real public GitHub clone, and credential-boundary checks. Private GCM clone is reviewed in docs, not executed in CI.
 
-This work is not merged to `main`. Windows CI run `45386246393` on `a65cfe4` succeeded for the initial bootstrap. Review follow-up CI is recorded only after a successful run on the latest branch head. It is not a Product Owner clean-machine test.
+This work is not merged to `main`. Review follow-up Windows CI run `45388706337` on `c90fff3` succeeded, including the full unit suite (WP-2.1–2.5.1), corrupt-SQLite and Clone fail-closed tests, the real public clone, and installer smoke. Pull request run `45388716073` also succeeded. It is not a Product Owner clean-machine test.
 
 ## Not yet release-ready
 
