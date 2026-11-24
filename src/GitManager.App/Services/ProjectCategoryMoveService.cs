@@ -15,11 +15,16 @@ public sealed class ProjectCategoryMoveService(
     public Task<string> MoveProjectAsync(
         string projectId, string targetCategoryId,
         CancellationToken cancellationToken = default) =>
-        MoveProjectAsync(projectId, targetCategoryId, null, cancellationToken);
+        MoveProjectCoreAsync(projectId, targetCategoryId, null, false, cancellationToken);
 
-    public async Task<string> MoveProjectAsync(
+    public Task<string> MoveProjectToNameAsync(
+        string projectId, string categoryId, string categoryName,
+        CancellationToken cancellationToken = default) =>
+        MoveProjectCoreAsync(projectId, categoryId, categoryName, true, cancellationToken);
+
+    private async Task<string> MoveProjectCoreAsync(
         string projectId, string targetCategoryId, string? targetCategoryName,
-        CancellationToken cancellationToken = default)
+        bool categoryLockAlreadyHeld, CancellationToken cancellationToken)
     {
         var projects = await catalog.GetProjectsAsync();
         var project = projects.FirstOrDefault(x => x.ProjectId == projectId)
@@ -44,6 +49,9 @@ public sealed class ProjectCategoryMoveService(
             throw new IOException("پروژه یا یکی از والدهای آن شامل Reparse Point است؛ انتقال خودکار متوقف شد.");
 
         var operationKey = BuildOperationKey(category.CategoryId, destinationCategoryName);
+        await using var categoryLeases = categoryLockAlreadyHeld
+            ? null
+            : await AcquireCategoryLocksAsync(project.CategoryId, category.CategoryId, cancellationToken);
         await using var lease = await _operationLock.AcquireAsync("project:" + project.ProjectId, cancellationToken);
         var operation = await journal.BeginAsync("CategoryMove", operationKey, project.ProjectId,
             source, destination, cancellationToken);
@@ -86,6 +94,34 @@ public sealed class ProjectCategoryMoveService(
                     $"{ex.Message} | بازگردانی انتقال ناموفق بود: {rollbackError.Message}", CancellationToken.None);
             }
             throw;
+        }
+    }
+
+    private async Task<IAsyncDisposable> AcquireCategoryLocksAsync(
+        string sourceCategoryId, string destinationCategoryId, CancellationToken cancellationToken)
+    {
+        var leases = new List<IAsyncDisposable>();
+        try
+        {
+            foreach (var categoryId in new[] { sourceCategoryId, destinationCategoryId }
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(x => x, StringComparer.Ordinal))
+                leases.Add(await _operationLock.AcquireAsync("category:" + categoryId, cancellationToken));
+            return new CompositeLease(leases);
+        }
+        catch
+        {
+            for (var i = leases.Count - 1; i >= 0; i--) await leases[i].DisposeAsync();
+            throw;
+        }
+    }
+
+    private sealed class CompositeLease(List<IAsyncDisposable> leases) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            for (var i = leases.Count - 1; i >= 0; i--) await leases[i].DisposeAsync();
         }
     }
 
