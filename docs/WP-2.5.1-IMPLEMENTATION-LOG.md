@@ -11,8 +11,11 @@ Merge policy: Draft PR into WP-2.4 only. No merge to `main`. Prior work-package 
 - Clone CanExecute: library open + non-empty GitHub URL, with Persian `CloneDisabledReason` in the UI.
 - Tests: fresh journal, empty SQLite, upgrade without data loss, recovery-does-not-block-catalog, Clone gate, scripted Clone registration, real public repository clone.
 
+## Release validation
+
+Windows CI run [45386246393](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45386246393) on `a65cfe4ebb232e5a9aad6d6f68c6f7d88ae8ec82` succeeded: unit tests (including journal bootstrap, empty SQLite, upgrade without data loss, scripted Clone registration, and a real public `octocat/Hello-World` clone), self-contained publish, Inno Setup compile, portable ZIP, SHA-256, source handoff, and install/repair/upgrade/uninstall smoke. Pull request run [45386272862](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45386272862) on the same commit also succeeded. This is not a Product Owner clean-machine test and not a signed production release.
+
 ## Not claimed
 
-- Windows CI green until a run on this branch head succeeds.
 - Product Owner clean-machine installation.
 - WP-2.5.2+ (chrome/theme, Fetch/Pull, Commit, Push, progress UI, LFS honesty, installer/portable split, user docs).

@@ -55,7 +55,7 @@ Windows CI run `45365248926` on `eb434a9` succeeded, including installer smoke. 
 - Clone enables when the library is open and a GitHub URL is present; disabled reasons are Persian.
 - Tests cover fresh install, empty SQLite, upgrade without data loss, scripted Clone registration, and a real public GitHub clone.
 
-This work is not merged to `main`. Windows CI on this branch is recorded only after a successful run. It is not a Product Owner clean-machine test.
+This work is not merged to `main`. Windows CI run `45386246393` on `a65cfe4` succeeded, including unit tests, the real public clone, and installer smoke. Pull request run `45386272862` also succeeded. It is not a Product Owner clean-machine test.
 
 ## Not yet release-ready
 
