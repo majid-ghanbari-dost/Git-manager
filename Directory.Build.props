@@ -5,6 +5,5 @@
     <AssemblyTitle>Git Manager</AssemblyTitle>
     <Description>Windows desktop GitHub repository library manager.</Description>
     <Copyright>Copyright © 2026</Copyright>
-    <NeutralLanguage>fa-IR</NeutralLanguage>
   </PropertyGroup>
 </Project>

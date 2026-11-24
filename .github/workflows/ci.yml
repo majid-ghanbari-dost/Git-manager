@@ -19,7 +19,11 @@ jobs:
       - name: Build
         run: dotnet build src/GitManager.App/GitManager.App.csproj --configuration Release --no-restore
       - name: Run unit tests
-        run: dotnet test tests/GitManager.Tests/GitManager.Tests.csproj --configuration Release
+        run: >
+          dotnet test tests/GitManager.Tests/GitManager.Tests.csproj
+          --configuration Release
+          --logger "trx;LogFileName=wp24.trx"
+          --results-directory artifacts/test-results
       - name: Publish self-contained win-x64
         run: >
           dotnet publish src/GitManager.App/GitManager.App.csproj
@@ -101,13 +105,19 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          name: git-manager-wp-2-4-test-results
+          path: artifacts/test-results/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
           name: git-manager-wp-2-4-install-evidence
           path: |
             artifacts/install-evidence/
             artifacts/inno-compile.log
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
           name: git-manager-wp-2-4-release
           path: |
@@ -118,7 +128,7 @@ jobs:
             artifacts/RELEASE-SHA256.txt
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
           name: git-manager-wp-2-4-source-handoff
           path: |
@@ -126,7 +136,7 @@ jobs:
             artifacts/GitManager-WP-2.4-Handoff.zip.sha256
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
           name: git-manager-win-x64
           path: artifacts/GitManager-win-x64/

@@ -49,6 +49,8 @@ public sealed class ProductSmokeTests
 
     private static string FindInstallerScript()
     {
+        var copied = Path.Combine(AppContext.BaseDirectory, "installer", "GitManager.iss");
+        if (File.Exists(copied)) return copied;
         foreach (var start in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() })
         {
             var dir = new DirectoryInfo(start);
