@@ -102,6 +102,64 @@ public sealed class RepositoryImportTests
     }
 
     [Fact]
+    public async Task Clone_JournalCorruptMidOperation_PreservesStagingAndOriginalError()
+    {
+        var root = NewRoot();
+        try
+        {
+            var journalPath = Path.Combine(root, "operations.sqlite3");
+            var git = new ScriptedGitProcess("https://github.com/octocat/Hello-World.git");
+            var journal = new CorruptOnStateJournal(journalPath, "CommitPending");
+            var opened = await OpenLibraryAsync(root, git, journal);
+            var destination = new WorkspaceService().GetProjectContainer(
+                root, "Active", "Unclassified", "octocat", "Hello-World");
+
+            var ex = await Assert.ThrowsAsync<JournalUnavailableException>(
+                () => opened.Importer.CloneAsync(root, PublicCloneUrl, "Unclassified"));
+            Assert.Equal(JournalUnavailableException.UserMessage, ex.Message);
+            Assert.True(git.CloneWasInvoked);
+            Assert.Empty(await opened.Catalog.GetProjectsAsync());
+            Assert.False(Directory.Exists(destination));
+            var staging = Assert.Single(Directory.GetDirectories(Path.Combine(root, "00_Manager", "temp")));
+            Assert.True(File.Exists(Path.Combine(staging, "repository", "README.md")));
+            var log = File.ReadAllText(DiagnosticLog.FilePath(DiagnosticLog.DirectoryFor(root)));
+            Assert.Contains("could not record RecoveryRequired", log);
+            Assert.Contains("staging and destination were left in place", log);
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
+    public async Task Clone_GitFailureThenJournalCorrupt_PreservesOriginalErrorAndStaging()
+    {
+        var root = NewRoot();
+        try
+        {
+            var journalPath = Path.Combine(root, "operations.sqlite3");
+            var gitError = new InvalidOperationException("Git با خطا متوقف شد: simulated clone failure");
+            var git = new ScriptedGitProcess("https://github.com/octocat/Hello-World.git", gitError);
+            var journal = new CorruptOnStateJournal(journalPath, "RolledBack");
+            var opened = await OpenLibraryAsync(root, git, journal);
+            var destination = new WorkspaceService().GetProjectContainer(
+                root, "Active", "Unclassified", "octocat", "Hello-World");
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => opened.Importer.CloneAsync(root, PublicCloneUrl, "Unclassified"));
+            Assert.Same(gitError, ex);
+            Assert.Contains("simulated clone failure", ex.Message);
+            Assert.DoesNotContain("SQLite", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(await opened.Catalog.GetProjectsAsync());
+            Assert.False(Directory.Exists(destination));
+            var staging = Assert.Single(Directory.GetDirectories(Path.Combine(root, "00_Manager", "temp")));
+            Assert.True(File.Exists(Path.Combine(staging, "repository", "README.md")));
+            var log = File.ReadAllText(DiagnosticLog.FilePath(DiagnosticLog.DirectoryFor(root)));
+            Assert.Contains("could not record rollback", log);
+            Assert.Contains("staging was not deleted", log);
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
     public async Task Clone_RealPublicRepository_RegistersInCatalogAndIsOpenable()
     {
         var root = NewRoot();
@@ -128,14 +186,26 @@ public sealed class RepositoryImportTests
         finally { DeleteRoot(root); }
     }
 
-    private static Task<LibraryStartupResult> OpenLibraryAsync(string root, GitProcess git) =>
+    private static Task<LibraryStartupResult> OpenLibraryAsync(
+        string root, GitProcess git, ProjectOperationJournal? journal = null) =>
         LibraryStartup.OpenAsync(
             root,
-            new ProjectOperationJournal(Path.Combine(root, "operations.sqlite3")),
+            journal ?? new ProjectOperationJournal(Path.Combine(root, "operations.sqlite3")),
             git,
             new ProjectOperationLock(Path.Combine(root, "locks")));
 
-    private sealed class ScriptedGitProcess(string originUrl) : GitProcess
+    private sealed class CorruptOnStateJournal(string path, string corruptOnState) : ProjectOperationJournal(path)
+    {
+        public override async Task SetStateAsync(
+            string operationId, string state, string? error = null, CancellationToken cancellationToken = default)
+        {
+            if (state == corruptOnState)
+                await File.WriteAllTextAsync(path, "CORRUPT-NOT-SQLITE-" + new string('X', 1024), cancellationToken);
+            await base.SetStateAsync(operationId, state, error, cancellationToken);
+        }
+    }
+
+    private sealed class ScriptedGitProcess(string originUrl, Exception? cloneError = null) : GitProcess
     {
         public bool CloneWasInvoked { get; private set; }
         public string[]? LastCloneArguments { get; private set; }
@@ -153,6 +223,7 @@ public sealed class RepositoryImportTests
                 var destination = arguments[3];
                 Directory.CreateDirectory(Path.Combine(destination, ".git"));
                 File.WriteAllText(Path.Combine(destination, "README.md"), "unit-clone");
+                if (cloneError is not null) throw cloneError;
                 return Task.FromResult("");
             }
 

@@ -134,21 +134,36 @@ public class ProjectOperationJournal
         string? error = null,
         CancellationToken cancellationToken = default)
     {
-        await InitializeAsync(cancellationToken);
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE project_operations
-            SET state = $state, error = $error, updated_at_utc = $updated
-            WHERE operation_id = $id;
-            """;
-        command.Parameters.AddWithValue("$state", state);
-        command.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value);
-        command.Parameters.AddWithValue("$updated", DateTime.UtcNow.ToString("O"));
-        command.Parameters.AddWithValue("$id", operationId);
-        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
-            throw new InvalidOperationException("رکورد عملیات در Recovery Journal پیدا نشد.");
+        try
+        {
+            await InitializeAsync(cancellationToken);
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE project_operations
+                SET state = $state, error = $error, updated_at_utc = $updated
+                WHERE operation_id = $id;
+                """;
+            command.Parameters.AddWithValue("$state", state);
+            command.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value);
+            command.Parameters.AddWithValue("$updated", DateTime.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("$id", operationId);
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("رکورد عملیات در Recovery Journal پیدا نشد.");
+        }
+        catch (JournalUnavailableException)
+        {
+            throw;
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsStorageFailure(ex))
+        {
+            throw new JournalUnavailableException(ex);
+        }
     }
 
     public virtual async Task<IReadOnlyList<ProjectOperationEntry>> GetInterruptedAsync(
