@@ -115,6 +115,16 @@ public sealed class CategoryMoveRecoveryService(
                     continue;
                 }
 
+                if (!Path.GetFullPath(project.ContainerPath).Equals(source, StringComparison.OrdinalIgnoreCase) ||
+                    !Path.GetFullPath(project.RepositoryPath).Equals(
+                        Path.Combine(source, "repository"), StringComparison.OrdinalIgnoreCase))
+                {
+                    await journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                        "کاتالوگ به مسیر دیگری اشاره می‌کند؛ مقصد برای جلوگیری از جابه‌جایی اشتباه حفظ شد.", cancellationToken);
+                    attention++;
+                    continue;
+                }
+
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(source)!);
