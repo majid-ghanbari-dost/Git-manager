@@ -109,6 +109,34 @@ public sealed class CategoryManagementTests
     }
 
     [Fact]
+    public async Task Reorder_PersistsOrderAndKeepsUnclassifiedPinnedFirst()
+    {
+        var root = NewRoot();
+        try
+        {
+            var catalog = new ProjectCatalog(root);
+            await catalog.InitializeAsync();
+            var service = new CategoryManagementService(catalog);
+            var first = await service.CreateAsync("Zed");
+            var second = await service.CreateAsync("Alpha");
+
+            await service.MoveUpAsync(second.CategoryId);
+
+            var reordered = await service.GetCategoriesAsync();
+            Assert.True(reordered.FindIndex(x => x.CategoryId == second.CategoryId) <
+                        reordered.FindIndex(x => x.CategoryId == first.CategoryId));
+            Assert.Equal("Unclassified", reordered[0].Name);
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.MoveDownAsync(reordered[0].CategoryId));
+
+            await catalog.InitializeAsync();
+            var afterRestart = await catalog.GetCategoriesAsync();
+            Assert.Equal(reordered.Select(x => x.CategoryId), afterRestart.Select(x => x.CategoryId));
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
     public async Task Initialize_MigratesLegacyCatalogWithoutLosingProjectsOrCustomCategories()
     {
         var root = NewRoot();
