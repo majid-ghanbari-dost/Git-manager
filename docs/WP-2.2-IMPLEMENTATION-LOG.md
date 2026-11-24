@@ -22,7 +22,7 @@ Merge policy: this PR remains Draft; no merge to `main` or prior phase branches 
 
 ## Release validation
 
-Final Windows CI run 130 passed on the branch head: build, all 34 unit tests, portable Windows x64 publish, source handoff generation, and both artifact uploads. The handoff manifest contains 46 entries; all 46 hashes were independently verified. The inner handoff ZIP SHA-256 is `900705d20f6557cc7376fc740bf8a50aec28f2d3c4a96d033749b0a17be6f0d9`.
+Final Windows CI run 130 passed on the branch head: build, all 34 unit tests, portable Windows x64 publish, source handoff generation, and both artifact uploads. The handoff manifest contains 46 entries; all 46 hashes were independently verified. The authoritative handoff ZIP checksum is included in the adjacent `.sha256` file.
 
 ## Explicitly out of scope
 
