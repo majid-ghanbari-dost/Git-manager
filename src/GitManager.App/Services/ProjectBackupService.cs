@@ -72,8 +72,16 @@ public sealed class ProjectBackupService
         {
             try
             {
-                if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
-                await _journal.SetStateAsync(operation.OperationId, "RolledBack", ex.Message, CancellationToken.None);
+                if (Directory.Exists(final))
+                {
+                    await _journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                        "نسخه نهایی ساخته شده اما ثبت وضعیت عملیات کامل نشد؛ فایل نهایی حفظ شد.", CancellationToken.None);
+                }
+                else
+                {
+                    if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+                    await _journal.SetStateAsync(operation.OperationId, "RolledBack", ex.Message, CancellationToken.None);
+                }
             }
             catch (Exception cleanupError)
             {
