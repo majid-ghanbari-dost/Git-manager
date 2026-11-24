@@ -332,7 +332,7 @@ public sealed class ProjectCatalog
 
     public async Task UpdateProjectCategoryAndPathAsync(
         string projectId, string categoryId, string categoryName,
-        string containerPath, string repositoryPath)
+        string containerPath, string repositoryPath, bool allowPendingCategoryRename = false)
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
@@ -343,7 +343,8 @@ public sealed class ProjectCatalog
         categoryCheck.CommandText = "SELECT name FROM categories WHERE category_id = $id";
         categoryCheck.Parameters.AddWithValue("$id", categoryId);
         var actualName = await categoryCheck.ExecuteScalarAsync() as string;
-        if (actualName is null || !actualName.Equals(categoryName, StringComparison.Ordinal))
+        if (actualName is null || (!allowPendingCategoryRename &&
+            !actualName.Equals(categoryName, StringComparison.Ordinal)))
             throw new InvalidOperationException("دسته‌بندی مقصد در کاتالوگ وجود ندارد یا تغییر کرده است.");
 
         var update = connection.CreateCommand();
@@ -361,6 +362,39 @@ public sealed class ProjectCatalog
         update.Parameters.AddWithValue("$projectId", projectId);
         if (await update.ExecuteNonQueryAsync() != 1)
             throw new InvalidOperationException("پروژه برای به‌روزرسانی پیدا نشد.");
+        transaction.Commit();
+    }
+
+    public async Task RenameCategoryRecordAsync(string categoryId, string newName)
+    {
+        var normalized = ValidateCategoryName(newName);
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+
+        var lookup = connection.CreateCommand();
+        lookup.Transaction = transaction;
+        lookup.CommandText = "SELECT name, is_system FROM categories WHERE category_id = $id";
+        lookup.Parameters.AddWithValue("$id", categoryId);
+        string oldName;
+        bool isSystem;
+        await using (var reader = await lookup.ExecuteReaderAsync())
+        {
+            if (!await reader.ReadAsync()) throw new InvalidOperationException("دسته‌بندی پیدا نشد.");
+            oldName = reader.GetString(0);
+            isSystem = reader.GetInt64(1) != 0;
+        }
+        if (isSystem || oldName.Equals("Unclassified", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("دسته‌بندی Unclassified سیستمی است و قابل تغییر نام نیست.");
+
+        var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = "UPDATE categories SET name = $name WHERE category_id = $id";
+        update.Parameters.AddWithValue("$name", normalized);
+        update.Parameters.AddWithValue("$id", categoryId);
+        try { await update.ExecuteNonQueryAsync(); }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        { throw new InvalidOperationException("دسته‌بندی با این نام از قبل وجود دارد.", ex); }
         transaction.Commit();
     }
 
