@@ -41,6 +41,7 @@ public sealed class ProjectCategoryMoveService(
         var operation = await journal.BeginAsync("CategoryMove", operationKey, project.ProjectId,
             source, destination, cancellationToken);
         var moved = false;
+        var catalogUpdated = false;
         try
         {
             await journal.SetStateAsync(operation.OperationId, "Running", cancellationToken: cancellationToken);
@@ -50,11 +51,19 @@ public sealed class ProjectCategoryMoveService(
             var repositoryPath = Path.Combine(destination, Path.GetRelativePath(source, project.RepositoryPath));
             await catalog.UpdateProjectCategoryAndPathAsync(project.ProjectId, category.CategoryId,
                 category.Name, destination, repositoryPath);
+            catalogUpdated = true;
             await journal.SetStateAsync(operation.OperationId, "Completed", cancellationToken: cancellationToken);
             return destination;
         }
         catch (Exception ex)
         {
+            if (catalogUpdated)
+            {
+                await journal.SetStateAsync(operation.OperationId, "RecoveryRequired",
+                    $"پوشه و کاتالوگ منتقل شده‌اند؛ ثبت وضعیت نهایی نیازمند بازیابی است: {ex.Message}", CancellationToken.None);
+                throw;
+            }
+
             try
             {
                 if (moved && Directory.Exists(destination) && !Directory.Exists(source))
