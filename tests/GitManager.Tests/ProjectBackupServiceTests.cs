@@ -61,7 +61,13 @@ public sealed class ProjectBackupServiceTests
         }
         finally
         {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root))
+            {
+                foreach (var path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))
+                    File.SetAttributes(path, FileAttributes.Normal);
+                File.SetAttributes(root, FileAttributes.Normal);
+                Directory.Delete(root, recursive: true);
+            }
         }
     }
 }
