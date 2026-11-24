@@ -11,7 +11,7 @@
 - [x] First-run workspace setup and validation
 - [x] SQLite catalog and initial category seed
 - [x] Initial project inventory and selection
-- [ ] Category CRUD and lifecycle management (WP-2.2 in progress; stable IDs, SQLite migration, and empty-category CRUD implemented, project moves pending)
+- [x] Category CRUD, project moves, populated-category rename, and ordering (WP-2.2; lifecycle management remains separate)
 - [x] Recovery journal and interrupted-operation recovery (WP-2.1 implementation; CI validation pending)
 - [ ] CI build and unit tests passing
 
