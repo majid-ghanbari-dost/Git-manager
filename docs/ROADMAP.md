@@ -12,7 +12,7 @@
 - [x] SQLite catalog and initial category seed
 - [x] Initial project inventory and selection
 - [ ] Category CRUD and lifecycle management
-- [ ] Recovery journal and interrupted-operation recovery
+- [x] Recovery journal and interrupted-operation recovery (WP-2.1 implementation; CI validation pending)
 - [ ] CI build and unit tests passing
 
 ## Phase 2 — Repository acquisition
