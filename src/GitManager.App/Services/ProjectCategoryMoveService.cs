@@ -49,6 +49,8 @@ public sealed class ProjectCategoryMoveService(
             throw new DirectoryNotFoundException("پوشه پروژه یا مخزن Git در مسیر ثبت‌شده پیدا نشد.");
         if (Directory.Exists(destination) || File.Exists(destination))
             throw new IOException("پوشه مقصد از قبل وجود دارد؛ هیچ فایلی بازنویسی نشد.");
+        if (HasReparsePointInAncestors(Path.GetDirectoryName(destination)!))
+            throw new IOException("مسیر والد مقصد شامل Reparse Point است؛ انتقال خودکار متوقف شد.");
         if (ContainsReparsePoint(source))
             throw new IOException("پروژه یا یکی از والدهای آن شامل Reparse Point است؛ انتقال خودکار متوقف شد.");
 
@@ -131,6 +133,22 @@ public sealed class ProjectCategoryMoveService(
 
     internal static string BuildOperationKey(string sourceCategoryId, string targetCategoryId, string categoryName) =>
         $"category-move|{sourceCategoryId}|{targetCategoryId}|{Uri.EscapeDataString(categoryName)}";
+
+    private static bool HasReparsePointInAncestors(string path)
+    {
+        try
+        {
+            var current = Path.GetFullPath(path);
+            while (!string.IsNullOrEmpty(current))
+            {
+                if (Directory.Exists(current) || File.Exists(current))
+                    if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
+                current = Path.GetDirectoryName(current);
+            }
+            return false;
+        }
+        catch { return true; }
+    }
 
     internal static bool ContainsReparsePoint(string path)
     {
