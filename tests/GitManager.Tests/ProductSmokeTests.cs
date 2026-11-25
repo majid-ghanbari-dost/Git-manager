@@ -45,7 +45,7 @@ public sealed class ProductSmokeTests
         Assert.DoesNotContain("projects.sqlite3", iss, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("operations.sqlite3", iss, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Your workspace, project catalog, backups, notes, and LocalAppData settings will not be deleted.", iss, StringComparison.Ordinal);
-        Assert.Contains("2.4.0", iss, StringComparison.Ordinal);
+        Assert.Contains("2.5.4", iss, StringComparison.Ordinal);
     }
 
     private static string FindInstallerScript()
