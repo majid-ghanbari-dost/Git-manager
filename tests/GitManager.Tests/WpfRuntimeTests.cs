@@ -12,126 +12,104 @@ namespace GitManager.Tests;
 [Collection("WpfSta")]
 public sealed class WpfRuntimeTests
 {
-    [Fact]
+    [StaFact]
     public void FrozenSolidColorBrush_ColorMutation_Throws()
     {
-        StaWpf.Run(() =>
-        {
-            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4F6F9")!);
-            brush.Freeze();
-            Assert.True(brush.IsFrozen);
-            Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
-        });
+        Assert.Equal(ApartmentState.STA, Thread.CurrentThread.GetApartmentState());
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4F6F9")!);
+        brush.Freeze();
+        Assert.True(brush.IsFrozen);
+        Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
     }
 
-    [Fact]
+    [StaFact]
     public void AppResources_ThemeBrush_MutationThrowsWhenFrozen()
     {
-        StaWpf.Run(() =>
-        {
-            StaWpf.EnsureApp();
-            var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
-            if (brush.IsFrozen)
-                Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
-        });
+        StaWpf.EnsureApp();
+        var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
+        if (brush.IsFrozen)
+            Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
     }
 
-    [Fact]
+    [StaFact]
     public void SetBrush_ReplacesFrozenResource_DoesNotThrow()
     {
-        StaWpf.Run(() =>
-        {
-            StaWpf.EnsureApp();
-            WpfMainWindow.SetBrush("AppBackgroundBrush", "#111827");
-            var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
-            Assert.True(brush.IsFrozen);
-            Assert.Equal((Color)ColorConverter.ConvertFromString("#111827")!, brush.Color);
-        });
+        StaWpf.EnsureApp();
+        WpfMainWindow.SetBrush("AppBackgroundBrush", "#111827");
+        var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
+        Assert.True(brush.IsFrozen);
+        Assert.Equal((Color)ColorConverter.ConvertFromString("#111827")!, brush.Color);
     }
 
-    [Fact]
+    [StaFact]
     public void DrawingImage_AsWindowIcon_IsRecorded()
     {
-        StaWpf.Run(() =>
+        StaWpf.EnsureApp();
+        var logo = Assert.IsType<DrawingImage>(Application.Current.Resources["GitManagerLogo"]);
+        Exception? caught = null;
+        var window = new Window
         {
-            StaWpf.EnsureApp();
-            var logo = Assert.IsType<DrawingImage>(Application.Current.Resources["GitManagerLogo"]);
-            Exception? caught = null;
-            var window = new Window
-            {
-                Width = 120,
-                Height = 80,
-                WindowStyle = WindowStyle.ToolWindow,
-                ShowInTaskbar = false,
-                Icon = logo
-            };
-            try
-            {
-                window.Show();
-                StaWpf.Pump();
-            }
-            catch (Exception ex)
-            {
-                caught = ex;
-            }
-            finally
-            {
-                try { window.Close(); } catch { }
-            }
+            Width = 120,
+            Height = 80,
+            WindowStyle = WindowStyle.ToolWindow,
+            ShowInTaskbar = false,
+            Icon = logo
+        };
+        try
+        {
+            window.Show();
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
+        }
+        catch (Exception ex)
+        {
+            caught = ex;
+        }
+        finally
+        {
+            try { window.Close(); } catch { }
+        }
 
-            // Record the result; do not treat a successful Show as proof that native
-            // HICON conversion is safe on an interactive Product Owner desktop.
-            if (caught is not null)
-                StartupLog.Write("StartupException", "DrawingImage-as-Icon", caught);
-            else
-                StartupLog.Write("ProcessStarted", "DrawingImage-as-Icon Show did not throw in this environment");
-        });
+        if (caught is not null)
+            StartupLog.Write("StartupException", "DrawingImage-as-Icon", caught);
     }
 
-    [Fact]
+    [StaFact]
     public void MainWindow_Show_ReachesLoaded_AndCloses()
     {
-        StaWpf.Run(() =>
+        StaWpf.EnsureApp();
+        var workspace = Path.Combine(Path.GetTempPath(), "GitManagerWpfRuntimeTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workspace);
+        var settingsPath = AppLocalState.SettingsPath;
+        string? previous = File.Exists(settingsPath) ? File.ReadAllText(settingsPath) : null;
+        try
         {
-            StaWpf.EnsureApp();
-            var workspace = Path.Combine(Path.GetTempPath(), "GitManagerWpfRuntimeTests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(workspace);
-            var settingsPath = AppLocalState.SettingsPath;
-            string? previous = File.Exists(settingsPath) ? File.ReadAllText(settingsPath) : null;
-            try
+            new SettingsService().SaveWorkspaceAsync(workspace).GetAwaiter().GetResult();
+            var loaded = false;
+            var window = new WpfMainWindow
             {
-                new SettingsService().SaveWorkspaceAsync(workspace).GetAwaiter().GetResult();
-                var loaded = false;
-                var window = new WpfMainWindow
-                {
-                    ShowInTaskbar = false,
-                    WindowStartupLocation = WindowStartupLocation.Manual,
-                    Left = 0,
-                    Top = 0
-                };
-                window.Loaded += (_, _) => loaded = true;
-                window.Show();
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
-                var deadline = DateTime.UtcNow.AddSeconds(20);
-                while (!loaded && DateTime.UtcNow < deadline)
-                    StaWpf.Pump();
-                Assert.True(loaded, "MainWindow.Loaded did not fire.");
-                Assert.True(File.Exists(StartupLog.FilePath), "startup.log was not created.");
-                var log = File.ReadAllText(StartupLog.FilePath);
-                Assert.Contains("MainWindowLoaded", log, StringComparison.Ordinal);
-                window.Close();
-                StaWpf.Pump();
-            }
-            finally
+                ShowInTaskbar = false,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = 0,
+                Top = 0
+            };
+            window.Loaded += (_, _) => loaded = true;
+            window.Show();
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
+            Assert.True(loaded, "MainWindow.Loaded did not fire.");
+            Assert.True(File.Exists(StartupLog.FilePath), "startup.log was not created.");
+            var log = File.ReadAllText(StartupLog.FilePath);
+            Assert.Contains("MainWindowLoaded", log, StringComparison.Ordinal);
+            window.Close();
+        }
+        finally
+        {
+            if (previous is null)
             {
-                if (previous is null)
-                {
-                    if (File.Exists(settingsPath)) File.Delete(settingsPath);
-                }
-                else File.WriteAllText(settingsPath, previous);
-                try { Directory.Delete(workspace, recursive: true); } catch { }
+                if (File.Exists(settingsPath)) File.Delete(settingsPath);
             }
-        });
+            else File.WriteAllText(settingsPath, previous);
+            try { Directory.Delete(workspace, recursive: true); } catch { }
+        }
     }
 }
 
@@ -140,28 +118,6 @@ public sealed class WpfStaCollection;
 
 internal static class StaWpf
 {
-    public static void Run(Action action)
-    {
-        Exception? caught = null;
-        var thread = new Thread(() =>
-        {
-            try { action(); }
-            catch (Exception ex) { caught = ex; }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        if (!thread.Join(TimeSpan.FromMinutes(1)))
-            throw new TimeoutException("STA WPF work did not finish in 1 minute.");
-        if (caught is not null) throw caught;
-    }
-
-    public static void Pump()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, () => frame.Continue = false);
-        Dispatcher.PushFrame(frame);
-    }
-
     public static WpfApp EnsureApp()
     {
         if (Application.Current is WpfApp existing)
@@ -169,6 +125,9 @@ internal static class StaWpf
             existing.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             return existing;
         }
+
+        if (Application.Current is not null)
+            throw new InvalidOperationException($"Unexpected Application type: {Application.Current.GetType().FullName}");
 
         var app = new WpfApp { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.InitializeComponent();
