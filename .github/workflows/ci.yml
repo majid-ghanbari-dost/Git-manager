@@ -20,11 +20,25 @@ jobs:
       - name: Build
         run: dotnet build src/GitManager.App/GitManager.App.csproj --configuration Release --no-restore
       - name: Run unit tests
-        run: >
-          dotnet test tests/GitManager.Tests/GitManager.Tests.csproj
-          --configuration Release
-          --logger "trx;LogFileName=wp24.trx"
-          --results-directory artifacts/test-results
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/test-results | Out-Null
+          dotnet test tests/GitManager.Tests/GitManager.Tests.csproj --configuration Release --logger "trx;LogFileName=wp24.trx" --results-directory artifacts/test-results
+          $code = $LASTEXITCODE
+          $trx = Get-ChildItem -LiteralPath artifacts/test-results -Filter *.trx -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($trx) {
+            [xml]$xml = Get-Content -LiteralPath $trx.FullName
+            $nsmgr = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $nsmgr.AddNamespace("t", "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")
+            foreach ($node in $xml.SelectNodes("//t:UnitTestResult[@outcome='Failed']", $nsmgr)) {
+              $name = $node.GetAttribute("testName")
+              $msg = $node.SelectSingleNode("t:Output/t:ErrorInfo/t:Message", $nsmgr)?.InnerText
+              $stack = $node.SelectSingleNode("t:Output/t:ErrorInfo/t:StackTrace", $nsmgr)?.InnerText
+              Write-Host "::error::$name :: $msg"
+              if ($stack) { Write-Host $stack }
+            }
+          }
+          if ($code -ne 0) { exit $code }
       - name: Publish self-contained win-x64
         run: >
           dotnet publish src/GitManager.App/GitManager.App.csproj
