@@ -392,6 +392,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             StatusMessage = "در حال Pull امن از GitHub...";
             var result = await _gitWorkflow.PullAsync(project);
+            if (_catalog is not null)
+                await _catalog.UpdateGitSnapshotAsync(project.ProjectId, result.Branch, result.Commit);
+            project.CurrentBranch = result.Branch;
+            project.CurrentCommit = result.Commit;
             StatusMessage = $"Pull شاخه {result.Branch} موفق بود. Commit: {result.Commit[..Math.Min(8, result.Commit.Length)]}";
             await RefreshProjectsAsync();
         }
@@ -416,6 +420,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             StatusMessage = "در حال ثبت Commit محلی...";
             var result = await _gitWorkflow.CommitAllAsync(project, message);
             CommitMessage = "";
+            if (_catalog is not null)
+                await _catalog.UpdateGitSnapshotAsync(project.ProjectId, result.Branch, result.Commit);
             project.CurrentBranch = result.Branch;
             project.CurrentCommit = result.Commit;
             StatusMessage = $"Commit محلی ثبت شد: {result.Commit[..Math.Min(8, result.Commit.Length)]} — برای انتشار، Push را بزنید.";
@@ -444,6 +450,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             StatusMessage = $"در حال ارسال شاخه {project.CurrentBranch} به GitHub...";
             var result = await _publisher.PushAsync(project);
+            if (_catalog is not null)
+                await _catalog.UpdateGitSnapshotAsync(project.ProjectId, result.Branch, result.Commit);
+            project.CurrentBranch = result.Branch;
+            project.CurrentCommit = result.Commit;
             StatusMessage = $"Push شاخه {result.Branch} با موفقیت انجام شد. Commit: {result.Commit[..Math.Min(8, result.Commit.Length)]}" +
                 (result.HasUncommittedChanges
                     ? " — توجه: تغییرات Commit‌نشده فقط روی همین رایانه باقی ماندند."
