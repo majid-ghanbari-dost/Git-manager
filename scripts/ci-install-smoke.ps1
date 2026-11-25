@@ -42,6 +42,55 @@ function Invoke-LoggedProcess {
     }
 }
 
+function Invoke-UiRuntimeSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$Exe,
+        [Parameter(Mandatory = $true)][string]$Workspace,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [int]$AliveSeconds = 30,
+        [Parameter(Mandatory = $true)][string]$EvidenceName
+    )
+    New-Item -ItemType Directory -Force -Path $Workspace, (Join-Path $env:LOCALAPPDATA "GitManager\logs") | Out-Null
+    $startupLog = Join-Path $env:LOCALAPPDATA "GitManager\logs\startup.log"
+    if (Test-Path -LiteralPath $startupLog) { Remove-Item -LiteralPath $startupLog -Force }
+
+    @{ WorkspacePath = $Workspace } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:LOCALAPPDATA "GitManager\settings.json") -Encoding utf8
+
+    $proc = Start-Process -FilePath $Exe -PassThru
+    if ($null -eq $proc) { throw "$Label failed to start." }
+    $start = Get-Date
+    while (((Get-Date) - $start).TotalSeconds -lt $AliveSeconds) {
+        Start-Sleep -Seconds 2
+        $proc.Refresh()
+        if ($proc.HasExited) {
+            $logTail = ""
+            if (Test-Path -LiteralPath $startupLog) { $logTail = Get-Content -LiteralPath $startupLog -Raw }
+            throw "$Label exited after $([int](((Get-Date) - $start).TotalSeconds))s with code $($proc.ExitCode). startup.log:`n$logTail"
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $startupLog)) {
+        throw "$Label: startup.log was not created at $startupLog"
+    }
+    $log = Get-Content -LiteralPath $startupLog -Raw
+    Copy-Item -LiteralPath $startupLog -Destination (Join-Path $LogDirectory $EvidenceName) -Force
+    if ($log -notmatch "MainWindowLoaded") {
+        throw "$Label: MainWindowLoaded was not recorded. startup.log:`n$log"
+    }
+
+    $proc.Refresh()
+    $closed = $false
+    if ($proc.MainWindowHandle -ne [IntPtr]::Zero) {
+        $closed = $proc.CloseMainWindow()
+    }
+    if (-not $proc.WaitForExit(20000)) {
+        try { $proc.Kill($true) } catch { }
+        try { [void]$proc.WaitForExit(5000) } catch { }
+        throw "$Label did not exit after CloseMainWindow (handle=$($proc.MainWindowHandle), CloseMainWindow=$closed)."
+    }
+    $report.Add("$Label: stayed alive ${AliveSeconds}s, MainWindowLoaded recorded, exit $($proc.ExitCode), CloseMainWindow=$closed.")
+}
+
 function Assert-PathExists([string]$Path, [string]$Why) {
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "Missing path ($Why): $Path"
@@ -112,6 +161,17 @@ try {
     $report.Add("Start Menu shortcut: $startMenu")
     $report.Add("Desktop shortcut: $desktop")
 
+    $settingsBackup = $null
+    if (Test-Path -LiteralPath $settingsMarker) { $settingsBackup = Get-Content -LiteralPath $settingsMarker -Raw }
+    $runtimeWorkspace = Join-Path $env:TEMP "GitManager-Runtime-Smoke"
+    Invoke-UiRuntimeSmoke -Exe $exe -Workspace $runtimeWorkspace -Label "UI runtime after install" -AliveSeconds 30 -EvidenceName "startup-first.log"
+    Invoke-UiRuntimeSmoke -Exe $exe -Workspace $runtimeWorkspace -Label "UI runtime restart" -AliveSeconds 30 -EvidenceName "startup-restart.log"
+    if ($null -ne $settingsBackup) {
+        Set-Content -LiteralPath $settingsMarker -Value $settingsBackup -Encoding utf8
+    }
+    $report.Add("Restored pre-runtime settings.json so uninstall assertions still see user-owned content.")
+    $report.Add("Note: process-alive + MainWindowLoaded is not proof that every pixel rendered on an interactive desktop.")
+
     Invoke-LoggedProcess -FilePath $exe -Name "ci-smoke after install" -Arguments "--ci-smoke"
     $report.Add("Application --ci-smoke after install exited 0.")
 
@@ -157,7 +217,7 @@ try {
 
     $report.Add("")
     $report.Add("## Result")
-    $report.Add("PASS: install, launch (`--ci-smoke`), repair, upgrade, and uninstall.")
+    $report.Add("PASS: install, UI runtime (no --ci-smoke, 30s + restart), launch (`--ci-smoke`), repair, upgrade, and uninstall.")
     $report.Add("PASS: uninstall did not remove user-owned workspace data or LocalAppData GitManager state.")
     $report.Add("PASS: uninstall did not remove a pre-existing sidecar file in the install directory.")
     $report.Add("")

@@ -7,9 +7,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>GitManager.App</RootNamespace>
     <AssemblyName>GitManager</AssemblyName>
+    <ApplicationIcon>Assets\GitManager.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\GitManager.ico" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="GitManager.Tests" />

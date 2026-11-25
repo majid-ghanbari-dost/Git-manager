@@ -195,9 +195,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private void ChooseWorkspace()
     {
-        var dialog = new OpenFolderDialog { Title = "محل اصلی کتابخانه Git Manager را انتخاب کنید", Multiselect = false };
-        if (dialog.ShowDialog() == true)
-            _ = SetWorkspaceAsync(dialog.FolderName);
+        try
+        {
+            var dialog = new OpenFolderDialog { Title = "محل اصلی کتابخانه Git Manager را انتخاب کنید", Multiselect = false };
+            if (dialog.ShowDialog() == true)
+                _ = SetWorkspaceAsync(dialog.FolderName);
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Write("StartupException", "OpenFolderDialog", ex);
+            StatusMessage = "انتخاب محل کتابخانه انجام نشد. از دکمه «تغییر محل کتابخانه» دوباره تلاش کنید.";
+        }
     }
 
     private async Task SetWorkspaceAsync(string path)

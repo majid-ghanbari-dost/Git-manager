@@ -3,7 +3,7 @@
 ; outside {app}. Do not add UninstallDelete or InstallDelete sections.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "2.5.4"
+  #define MyAppVersion "2.5.6"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\artifacts\GitManager-win-x64"
@@ -36,6 +36,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName={#MyAppName}
+SetupIconFile=..\src\GitManager.App\Assets\GitManager.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UsePreviousAppDir=yes
 UsePreviousGroup=yes

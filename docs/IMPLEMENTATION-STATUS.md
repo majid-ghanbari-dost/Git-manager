@@ -55,13 +55,46 @@ Windows CI run `45365248926` on `eb434a9` succeeded, including installer smoke. 
 - Clone enables when the library is open, the journal can record an operation, and a GitHub URL is present; an unusable journal (invalid file content or malformed SQLite pages) disables Clone with a Persian reason and does not create a partial project.
 - Tests cover fresh install, empty SQLite, invalid non-SQLite journal file content, malformed SQLite interior pages (header preserved), upgrade without data loss, scripted Clone registration, a real public GitHub clone, and credential-boundary checks. Private GCM clone is reviewed in docs, not executed in CI.
 
-This work is not merged to `main`. Review follow-up Windows CI run `45388706337` on `c90fff3` succeeded. Mid-Clone push CI `45399066199` on `f5ab0eb` succeeded; pull request CI `45399075128` failed when the hosted runner lost communication during installer smoke (unbounded `WaitForExit`). It is not a Product Owner clean-machine test.
+This work is not merged to `main`. Later 2.5.1 commits include mid-Clone error preserve (`f5ab0eb`), smoke wait bounds (`746592b`), and separate installer/portable artifacts (`bfe4ef3`). It is not a Product Owner clean-machine test.
+
+## WP-2.5.2 on `work/wp-2-5-2-ui-theme`
+
+- Persian UI refresh, custom title bar (`WindowStyle=None`), Light/Dark/System theme.
+- Draft PR #8. Not merged.
+
+## WP-2.5.3 on `work/wp-2-5-3-clone-ux`
+
+- Clearer Clone workflow copy and title-bar alignment.
+- Draft PR #9. Not merged.
+
+## WP-2.5.4 on `work/wp-2-5-4-push-and-branding`
+
+- Safe GitHub Push (current branch, GCM, no force-push) and vector brand mark.
+- Installer labeled 2.5.4. Draft PR #10. Windows CI `45592390889` succeeded. Product Owner desktop launch crashed; `--ci-smoke` does not open `MainWindow`.
+
+## WP-2.5.5 on `work/wp-2-5-5-git-workflow`
+
+- Fetch (`--prune`), Pull (`--ff-only`, clean tree), local Commit with confirmation.
+- Draft PR #11 @ `26b6101`. Windows CI `45593920567` succeeded. Installer metadata was still 2.5.4.
+
+## WP-2.5.6 on `work/wp-2-5-6-runtime-stability`
+
+- Startup log at `%LOCALAPPDATA%\GitManager\logs\startup.log` (independent of workspace).
+- Dispatcher / AppDomain / TaskScheduler exception logging.
+- Theme updates replace frozen `SolidColorBrush` resources instead of mutating `Color`.
+- Window icon is a real `.ico`; `DrawingImage` remains the in-window mark.
+- `Loaded` errors are logged and do not take down the process unhandled.
+- STA WPF test constructs `MainWindow`, `Show()`, waits for `Loaded`, and closes.
+- Installed smoke launches **without** `--ci-smoke`, requires 30s process lifetime + `MainWindowLoaded`, then restart.
+- Product version **2.5.6**. Separate installer and portable artifacts.
+- See [WP-2.5.6-DELIVERY-REPORT.md](WP-2.5.6-DELIVERY-REPORT.md).
+- Not a Product Owner desktop test. Process-alive in CI is not visual proof of every control.
 
 ## Not yet release-ready
 
-- Publish, diff review, secret scanning, and push confirmation are not implemented.
+- Code signing and Product Owner clean-machine / interactive UI validation are pending.
 - Submodule and Git LFS backup coverage is not implemented.
-- Code signing and Product Owner clean-machine validation are pending.
 - Restore-from-backup still writes an unregistered folder and is not a lifecycle un-archive.
+- Branch management and new GitHub repository creation are not implemented.
 
-Neither the foundation PR, WP-2.1, WP-2.2, WP-2.3, nor WP-2.4 has been merged into `main`.
+No work-package PR has been merged into `main`.

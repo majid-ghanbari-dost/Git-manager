@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using GitManager.App.Services;
 using GitManager.App.ViewModels;
 
 namespace GitManager.App;
@@ -16,28 +17,59 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _viewModel;
-        Loaded += async (_, _) =>
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        StartupLog.Write("MainWindowLoaded");
+        try
         {
             await ApplySavedThemeAsync();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Write("StartupException", "ApplySavedThemeAsync", ex);
+        }
+
+        try
+        {
             await _viewModel.InitializeAsync();
-        };
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Write("StartupException", "InitializeAsync", ex);
+        }
     }
 
     private async Task ApplySavedThemeAsync()
     {
         _loadingTheme = true;
-        var mode = await _themePreferences.LoadAsync();
-        ThemeSelector.SelectedIndex = mode switch { "Light" => 1, "Dark" => 2, _ => 0 };
-        ApplyTheme(mode);
-        _loadingTheme = false;
+        try
+        {
+            var mode = await _themePreferences.LoadAsync();
+            ThemeSelector.SelectedIndex = mode switch { "Light" => 1, "Dark" => 2, _ => 0 };
+            ApplyTheme(mode);
+        }
+        finally
+        {
+            _loadingTheme = false;
+        }
     }
 
     private async void ThemeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loadingTheme || ThemeSelector.SelectedIndex < 0) return;
         var mode = ThemeSelector.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" };
-        ApplyTheme(mode);
-        await _themePreferences.SaveAsync(mode);
+        try
+        {
+            ApplyTheme(mode);
+            await _themePreferences.SaveAsync(mode);
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Write("StartupException", "ThemeSelector_SelectionChanged", ex);
+        }
     }
 
     private void ApplyTheme(string mode)
@@ -56,10 +88,16 @@ public partial class MainWindow : Window
         SetBrush("GridLineBrush", dark ? "#374151" : "#E3E8EF");
     }
 
-    private void SetBrush(string key, string color)
+    internal static void SetBrush(string key, string color)
     {
-        if (Application.Current.Resources[key] is SolidColorBrush brush)
-            brush.Color = (Color)ColorConverter.ConvertFromString(color);
+        if (Application.Current is null)
+            throw new InvalidOperationException("Theme resources require a WPF Application.");
+        var converted = ColorConverter.ConvertFromString(color);
+        if (converted is not Color parsed)
+            throw new InvalidOperationException($"Invalid theme color '{color}'.");
+        var brush = new SolidColorBrush(parsed);
+        if (brush.CanFreeze) brush.Freeze();
+        Application.Current.Resources[key] = brush;
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
