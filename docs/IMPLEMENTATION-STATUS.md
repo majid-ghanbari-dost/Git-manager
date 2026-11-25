@@ -84,11 +84,11 @@ This work is not merged to `main`. Later 2.5.1 commits include mid-Clone error p
 - Theme updates replace frozen `SolidColorBrush` resources instead of mutating `Color`.
 - Window icon is a real `.ico`; `DrawingImage` remains the in-window mark.
 - `Loaded` errors are logged and do not take down the process unhandled.
-- STA WPF test constructs `MainWindow`, `Show()`, waits for `Loaded`, and closes.
-- Installed smoke launches **without** `--ci-smoke`, requires 30s process lifetime + `MainWindowLoaded`, then restart.
-- Product version **2.5.6**. Separate installer and portable artifacts.
+- STA WPF test constructs `MainWindow`, `Show()`, waits for `Loaded`, and closes — **passed** on Windows CI `08e4f8b` / run `45633358477`.
+- Installed smoke without `--ci-smoke` is implemented but **failed** on that same run. Later runs did not start (GitHub Actions billing).
+- Product version **2.5.6**. Separate installer and portable artifacts (not uploaded: smoke did not succeed).
 - See [WP-2.5.6-DELIVERY-REPORT.md](WP-2.5.6-DELIVERY-REPORT.md).
-- Not a Product Owner desktop test. Process-alive in CI is not visual proof of every control.
+- Not a Product Owner desktop test. Process-alive in CI is not visual proof of every control. Do not merge until installed UI smoke passes.
 
 ## Not yet release-ready
 
