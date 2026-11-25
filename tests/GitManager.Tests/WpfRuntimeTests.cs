@@ -56,7 +56,7 @@ public sealed class WpfRuntimeTests
         try
         {
             window.Show();
-            window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
+            StaWpf.Pump();
         }
         catch (Exception ex)
         {
@@ -81,7 +81,8 @@ public sealed class WpfRuntimeTests
         string? previous = File.Exists(settingsPath) ? File.ReadAllText(settingsPath) : null;
         try
         {
-            new SettingsService().SaveWorkspaceAsync(workspace).GetAwaiter().GetResult();
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+            File.WriteAllText(settingsPath, "{\"WorkspacePath\":" + System.Text.Json.JsonSerializer.Serialize(workspace) + "}");
             var loaded = false;
             var window = new WpfMainWindow
             {
@@ -92,12 +93,13 @@ public sealed class WpfRuntimeTests
             };
             window.Loaded += (_, _) => loaded = true;
             window.Show();
-            window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
+            StaWpf.Pump();
             Assert.True(loaded, "MainWindow.Loaded did not fire.");
             Assert.True(File.Exists(StartupLog.FilePath), "startup.log was not created.");
             var log = File.ReadAllText(StartupLog.FilePath);
             Assert.Contains("MainWindowLoaded", log, StringComparison.Ordinal);
             window.Close();
+            StaWpf.Pump();
         }
         finally
         {
@@ -143,6 +145,15 @@ internal static class StaWpf
             catch (Exception ex) { caught = ex; }
         });
         if (caught is not null) throw caught;
+    }
+
+    public static void Pump()
+    {
+        var frame = new DispatcherFrame();
+        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            () => frame.Continue = false);
+        Dispatcher.PushFrame(frame);
     }
 
     public static WpfApp EnsureApp()
