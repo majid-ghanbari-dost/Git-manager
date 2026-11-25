@@ -1,9 +1,10 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using GitManager.App;
 using GitManager.App.Services;
 using Xunit;
+using WpfApp = GitManager.App.App;
+using WpfMainWindow = GitManager.App.MainWindow;
 
 namespace GitManager.Tests;
 
@@ -42,7 +43,7 @@ public sealed class WpfRuntimeTests
         StaWpf.Run(() =>
         {
             StaWpf.EnsureApp();
-            MainWindow.SetBrush("AppBackgroundBrush", "#111827");
+            WpfMainWindow.SetBrush("AppBackgroundBrush", "#111827");
             var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
             Assert.True(brush.IsFrozen);
             Assert.Equal((Color)ColorConverter.ConvertFromString("#111827")!, brush.Color);
@@ -102,7 +103,7 @@ public sealed class WpfRuntimeTests
             {
                 new SettingsService().SaveWorkspaceAsync(workspace).GetAwaiter().GetResult();
                 var loaded = false;
-                var window = new MainWindow();
+                var window = new WpfMainWindow();
                 window.Loaded += (_, _) => loaded = true;
                 window.Show();
                 var deadline = DateTime.UtcNow.AddSeconds(20);
@@ -155,15 +156,15 @@ internal static class StaWpf
         Dispatcher.PushFrame(frame);
     }
 
-    public static App EnsureApp()
+    public static WpfApp EnsureApp()
     {
-        if (Application.Current is App existing)
+        if (Application.Current is WpfApp existing)
         {
             existing.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             return existing;
         }
 
-        var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var app = new WpfApp { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.InitializeComponent();
         return app;
     }
