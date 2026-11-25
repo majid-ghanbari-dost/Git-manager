@@ -13,7 +13,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly SettingsService _settings;
     private readonly ProjectOperationJournal _operationJournal;
     private readonly GitProcess _git;
-    private readonly ProjectOperationLock? _operationLock;
+    private readonly ProjectOperationLock _operationLock;
     private readonly ProjectBackupService _backups;
     private readonly ProjectRestoreService _restores;
     private readonly RepositoryPublishService _publisher;
@@ -213,6 +213,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             MoveToOnHoldCommand.NotifyCanExecuteChanged();
             ArchiveProjectCommand.NotifyCanExecuteChanged();
             RestoreArchivedCommand.NotifyCanExecuteChanged();
+            PushCommand.NotifyCanExecuteChanged();
         }
         catch (Exception ex)
         {
