@@ -136,14 +136,16 @@ internal static class StaWpf
         UiDispatcher = dispatcher!;
     }
 
-    public static void Run(Action action)
+    public static void Run(Action action, TimeSpan? timeout = null)
     {
         Exception? caught = null;
-        UiDispatcher.Invoke(() =>
+        var op = UiDispatcher.BeginInvoke(() =>
         {
             try { action(); }
             catch (Exception ex) { caught = ex; }
         });
+        if (!op.Wait(timeout ?? TimeSpan.FromSeconds(20)))
+            throw new TimeoutException("STA WPF work exceeded 20s. Window.Show may hang in Session 0.");
         if (caught is not null) throw caught;
     }
 
