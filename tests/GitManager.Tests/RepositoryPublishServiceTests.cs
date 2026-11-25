@@ -35,7 +35,7 @@ public sealed class RepositoryPublishServiceTests
             Assert.Contains("origin", push);
             Assert.DoesNotContain("--force", push);
             Assert.DoesNotContain("--force-with-lease", push);
-            Assert.Equal("manager", git.Calls.Single(args => args.Length > 1 && args[0] == "config")[^1]);
+            Assert.Contains(git.Calls, args => args.SequenceEqual(new[] { "config", "--get", "credential.helper" }));
         }
         finally
         {
