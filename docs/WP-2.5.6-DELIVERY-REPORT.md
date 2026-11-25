@@ -2,7 +2,7 @@
 
 Branch: `work/wp-2-5-6-runtime-stability`  
 Base: `work/wp-2-5-5-git-workflow` @ `26b61012276ea56333862c867e780780f993c889`  
-Head: see git / PR (must match this file after each push)  
+Head: `b0811790d4b416023e3da3a07b389641d1f81876`  
 Product version: **2.5.6**  
 Draft PR: https://github.com/majid-ghanbari-dost/Git-manager/pull/12  
 
