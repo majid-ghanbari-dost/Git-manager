@@ -1,3 +1,4 @@
+using System.IO;
 using GitManager.App.Services;
 using Xunit;
 
