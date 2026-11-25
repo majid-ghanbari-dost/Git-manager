@@ -127,6 +127,27 @@ $report.Add("")
 $report.Add("This run is a GitHub Actions windows-latest smoke. It is **not** a clean-machine Product Owner test.")
 $report.Add("")
 
+function Copy-StartupLogsToEvidence {
+    try {
+        $logs = Join-Path $env:LOCALAPPDATA "GitManager\logs"
+        if (Test-Path -LiteralPath $logs) {
+            Copy-Item -Path (Join-Path $logs "*") -Destination $LogDirectory -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+}
+
+$envDump = @(
+    "utc=$([DateTime]::UtcNow.ToString('o'))"
+    "setupExists=$(Test-Path -LiteralPath $SetupExe)"
+    "pwd=$PWD"
+    "localAppData=$env:LOCALAPPDATA"
+    "public=$env:PUBLIC"
+    "userProfile=$env:USERPROFILE"
+    "programData=$env:ProgramData"
+    "systemDrive=$env:SystemDrive"
+)
+Set-Content -LiteralPath (Join-Path $LogDirectory "smoke-env.txt") -Value $envDump -Encoding utf8
+
 $setupFull = (Resolve-Path -LiteralPath $SetupExe).Path
 $installDir = Join-Path $env:SystemDrive "CI Test Dir\Git Manager"
 $workspace = Join-Path $env:TEMP "کاربر GitManager Workspace"
@@ -173,6 +194,11 @@ try {
     if (-not $desktop) { throw "Desktop shortcut was not created." }
     $report.Add("Start Menu shortcut: $startMenu")
     $report.Add("Desktop shortcut: $desktop")
+    $layout = @()
+    if (Test-Path -LiteralPath $installDir) {
+        $layout = Get-ChildItem -LiteralPath $installDir -Force | ForEach-Object { $_.Name }
+    }
+    Set-Content -LiteralPath (Join-Path $LogDirectory "install-layout.txt") -Value $layout -Encoding utf8
 
     $settingsBackup = $null
     if (Test-Path -LiteralPath $settingsMarker) { $settingsBackup = Get-Content -LiteralPath $settingsMarker -Raw }
@@ -240,10 +266,12 @@ catch {
     $report.Add("")
     $report.Add("## Result")
     $report.Add("FAIL: $($_.Exception.Message)")
+    Copy-StartupLogsToEvidence
     $report | Set-Content -LiteralPath $ReportPath -Encoding utf8
     Write-Host "::error::$($_.Exception.Message)"
     throw
 }
 finally {
+    Copy-StartupLogsToEvidence
     $report | Set-Content -LiteralPath $ReportPath -Encoding utf8
 }

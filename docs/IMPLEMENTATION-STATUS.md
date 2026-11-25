@@ -82,13 +82,14 @@ This work is not merged to `main`. Later 2.5.1 commits include mid-Clone error p
 - Startup log at `%LOCALAPPDATA%\GitManager\logs\startup.log` (independent of workspace).
 - Dispatcher / AppDomain / TaskScheduler exception logging.
 - Theme updates replace frozen `SolidColorBrush` resources instead of mutating `Color`.
-- Window icon is a real `.ico`; `DrawingImage` remains the in-window mark.
+- Window icon is a real `.ico` loaded from an embedded stream (no XAML pack URI); `DrawingImage` remains the in-window mark.
 - `Loaded` errors are logged and do not take down the process unhandled.
+- Window placement falls back to Manual 0,0 when screen metrics are unusable (production still uses CenterScreen in XAML).
 - STA WPF test constructs `MainWindow`, `Show()`, waits for `Loaded`, and closes — **passed** on Windows CI `08e4f8b` / run `45633358477`.
-- Installed smoke without `--ci-smoke` is implemented but **failed** on that same run. Later runs did not start (GitHub Actions billing).
-- Product version **2.5.6**. Separate installer and portable artifacts (not uploaded: smoke did not succeed).
+- Installed smoke without `--ci-smoke` is implemented but **failed** on that same run. Exception text was not retrieved. Later runs (`746d97d`, `60d6c67`, `fdab8ed`) **did not start** (GitHub Actions billing / spending limit) — that is not a smoke result.
+- Product version **2.5.6**. Separate installer and portable artifacts. SHA-256 for a **green** smoke run does not exist. Not Product Owner–ready.
 - See [WP-2.5.6-DELIVERY-REPORT.md](WP-2.5.6-DELIVERY-REPORT.md).
-- Not a Product Owner desktop test. Process-alive in CI is not visual proof of every control. Do not merge until installed UI smoke passes.
+- Do not merge until installed UI smoke (30s alive + `MainWindowLoaded` + restart) passes.
 
 ## Not yet release-ready
 

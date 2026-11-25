@@ -129,6 +129,49 @@ public sealed class WpfRuntimeTests
         }
     });
 
+    [Fact]
+    public void MainWindow_Show_CenterScreen_ReachesLoaded() => StaWpf.Run(() =>
+    {
+        StaWpf.EnsureApp();
+        var workspace = Path.Combine(Path.GetTempPath(), "GitManagerWpfRuntimeTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workspace);
+        var settingsPath = AppLocalState.SettingsPath;
+        string? previous = null;
+        try
+        {
+            if (File.Exists(settingsPath)) previous = File.ReadAllText(settingsPath);
+        }
+        catch (IOException) { }
+
+        WpfMainWindow? window = null;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+            WriteSettings(settingsPath, "{\"WorkspacePath\":" + System.Text.Json.JsonSerializer.Serialize(workspace) + "}");
+            var loaded = false;
+            window = new WpfMainWindow { ShowInTaskbar = false };
+            GitManager.App.WindowStartupPlacement.Apply(window);
+            window.Loaded += (_, _) => loaded = true;
+            window.Show();
+            StaWpf.Pump();
+            Assert.True(loaded, "MainWindow.Loaded did not fire with production placement.");
+            window.Close();
+            StaWpf.Pump();
+        }
+        finally
+        {
+            try { window?.Close(); } catch { }
+            StaWpf.Pump();
+            try
+            {
+                if (previous is null) TryDelete(settingsPath);
+                else WriteSettings(settingsPath, previous);
+            }
+            catch { }
+            try { Directory.Delete(workspace, recursive: true); } catch { }
+        }
+    });
+
     private static void WriteSettings(string path, string json)
     {
         for (var attempt = 0; attempt < 8; attempt++)

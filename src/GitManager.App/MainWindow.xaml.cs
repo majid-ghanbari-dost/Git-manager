@@ -17,11 +17,14 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        StartupLog.Write("MainWindowCtor");
         InitializeComponent();
+        StartupLog.Write("MainWindowInitializeComponent");
         try
         {
             var icon = LoadWindowIcon();
             if (icon is not null) Icon = icon;
+            else StartupLog.Write("WindowIcon", "no embedded or file ico; window has no Icon");
         }
         catch (Exception ex)
         {
@@ -30,6 +33,8 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         Loaded += OnLoaded;
     }
+
+
 
     /// <summary>
     /// Pack URIs can throw in single-file publish because Assembly.Location is empty.
@@ -62,10 +67,12 @@ public partial class MainWindow : Window
 
     private static BitmapFrame FrameFromStream(Stream stream)
     {
-        var copy = new MemoryStream();
+        using var copy = new MemoryStream();
         stream.CopyTo(copy);
         copy.Position = 0;
-        return BitmapDecoder.Create(copy, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+        var frame = BitmapDecoder.Create(copy, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+        if (frame.CanFreeze) frame.Freeze();
+        return frame;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -163,4 +170,35 @@ public partial class MainWindow : Window
 
     private void ToggleMaximize() =>
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+}
+
+/// <summary>
+/// STA testhost overrode CenterScreen with Manual. Production XAML still uses
+/// CenterScreen, which can throw when Session 0 reports no usable screen.
+/// </summary>
+internal static class WindowStartupPlacement
+{
+    public static void Apply(Window window)
+    {
+        try
+        {
+            var width = SystemParameters.PrimaryScreenWidth;
+            var height = SystemParameters.PrimaryScreenHeight;
+            StartupLog.Write("WindowPlacement", $"screen={width}x{height}; location={window.WindowStartupLocation}");
+            if (width <= 0 || height <= 0 || double.IsNaN(width) || double.IsNaN(height) ||
+                double.IsInfinity(width) || double.IsInfinity(height))
+            {
+                window.WindowStartupLocation = WindowStartupLocation.Manual;
+                window.Left = 0;
+                window.Top = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Write("WindowPlacement", "SystemParameters failed; using Manual", ex);
+            window.WindowStartupLocation = WindowStartupLocation.Manual;
+            window.Left = 0;
+            window.Top = 0;
+        }
+    }
 }

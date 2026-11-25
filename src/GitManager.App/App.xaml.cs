@@ -11,6 +11,9 @@ public partial class App : Application
 
     static App()
     {
+        StartupLog.Write(
+            "AppTypeInitializer",
+            $"base={AppContext.BaseDirectory}; location={typeof(App).Assembly.Location}; interactive={Environment.UserInteractive}");
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             StartupLog.Write(
@@ -53,8 +56,10 @@ public partial class App : Application
             StartupLog.Write("ApplicationStartup");
             var window = new MainWindow();
             StartupLog.Write("MainWindowCreated");
-            MainWindow = window;
+            WindowStartupPlacement.Apply(window);
+            this.MainWindow = window;
             window.Show();
+            StartupLog.Write("MainWindowShown");
         }
         catch (Exception ex)
         {
