@@ -144,8 +144,9 @@ internal static class StaWpf
             try { action(); }
             catch (Exception ex) { caught = ex; }
         });
-        if (!op.Wait(timeout ?? TimeSpan.FromSeconds(20)))
-            throw new TimeoutException("STA WPF work exceeded 20s. Window.Show may hang in Session 0.");
+        var status = op.Wait(timeout ?? TimeSpan.FromSeconds(20));
+        if (status != DispatcherOperationStatus.Completed)
+            throw new TimeoutException($"STA WPF work did not complete ({status}). Window.Show may hang in Session 0.");
         if (caught is not null) throw caught;
     }
 
