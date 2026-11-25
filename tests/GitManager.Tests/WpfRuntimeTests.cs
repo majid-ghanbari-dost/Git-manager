@@ -78,13 +78,20 @@ public sealed class WpfRuntimeTests
         var workspace = Path.Combine(Path.GetTempPath(), "GitManagerWpfRuntimeTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspace);
         var settingsPath = AppLocalState.SettingsPath;
-        string? previous = File.Exists(settingsPath) ? File.ReadAllText(settingsPath) : null;
+        string? previous = null;
+        try
+        {
+            if (File.Exists(settingsPath)) previous = File.ReadAllText(settingsPath);
+        }
+        catch (IOException) { }
+
+        WpfMainWindow? window = null;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
-            File.WriteAllText(settingsPath, "{\"WorkspacePath\":" + System.Text.Json.JsonSerializer.Serialize(workspace) + "}");
+            WriteSettings(settingsPath, "{\"WorkspacePath\":" + System.Text.Json.JsonSerializer.Serialize(workspace) + "}");
             var loaded = false;
-            var window = new WpfMainWindow
+            window = new WpfMainWindow
             {
                 ShowInTaskbar = false,
                 WindowStartupLocation = WindowStartupLocation.Manual,
@@ -103,14 +110,38 @@ public sealed class WpfRuntimeTests
         }
         finally
         {
-            if (previous is null)
+            try { window?.Close(); } catch { }
+            StaWpf.Pump();
+            try
             {
-                if (File.Exists(settingsPath)) File.Delete(settingsPath);
+                if (previous is null) TryDelete(settingsPath);
+                else WriteSettings(settingsPath, previous);
             }
-            else File.WriteAllText(settingsPath, previous);
+            catch { }
             try { Directory.Delete(workspace, recursive: true); } catch { }
         }
     });
+
+    private static void WriteSettings(string path, string json)
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(path, json);
+                return;
+            }
+            catch (IOException)
+            {
+                StaWpf.Pump();
+            }
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
 }
 
 internal static class StaWpf
