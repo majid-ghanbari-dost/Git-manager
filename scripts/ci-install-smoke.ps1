@@ -228,6 +228,7 @@ catch {
     $report.Add("## Result")
     $report.Add("FAIL: $($_.Exception.Message)")
     $report | Set-Content -LiteralPath $ReportPath -Encoding utf8
+    Write-Host "::error::$($_.Exception.Message)"
     throw
 }
 finally {
