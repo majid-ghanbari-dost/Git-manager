@@ -17,6 +17,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly ProjectBackupService _backups;
     private readonly ProjectRestoreService _restores;
     private readonly RepositoryPublishService _publisher;
+    private readonly RepositoryGitWorkflowService _gitWorkflow;
     private ProjectCatalog? _catalog;
     private RepositoryImportService? _importer;
     private CategoryManagementService? _categoryManagement;
@@ -33,6 +34,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string _statusMessage = "برای شروع، محل کتابخانه را انتخاب کنید.";
     private string _searchText = "";
     private string _selectedLifecycleFilter = "همه";
+    private string _commitMessage = "";
     private ProjectRecord? _selectedProject;
 
     public ObservableCollection<string> Categories { get; } = new() { "Unclassified", "Kandoo", "Business Tools", "Experiments", "Personal", "Client Work" };
@@ -69,6 +71,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string NewCategoryName { get => _newCategoryName; set { _newCategoryName = value; OnPropertyChanged(); CreateCategoryCommand.NotifyCanExecuteChanged(); } }
     public string RenameCategoryName { get => _renameCategoryName; set { _renameCategoryName = value; OnPropertyChanged(); RenameCategoryCommand.NotifyCanExecuteChanged(); } }
     public string StatusMessage { get => _statusMessage; private set { _statusMessage = value; OnPropertyChanged(); } }
+    public string CommitMessage
+    {
+        get => _commitMessage;
+        set { _commitMessage = value; OnPropertyChanged(); CommitCommand.NotifyCanExecuteChanged(); }
+    }
     public int ProjectCount => Projects.Count;
     public ProjectRecord? SelectedProject
     {
@@ -84,6 +91,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ArchiveProjectCommand.NotifyCanExecuteChanged();
             RestoreArchivedCommand.NotifyCanExecuteChanged();
             PushCommand.NotifyCanExecuteChanged();
+            FetchCommand.NotifyCanExecuteChanged();
+            PullCommand.NotifyCanExecuteChanged();
+            CommitCommand.NotifyCanExecuteChanged();
         }
     }
     public string SearchText
@@ -112,6 +122,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ArchiveProjectCommand { get; }
     public AsyncRelayCommand RestoreArchivedCommand { get; }
     public AsyncRelayCommand PushCommand { get; }
+    public AsyncRelayCommand FetchCommand { get; }
+    public AsyncRelayCommand PullCommand { get; }
+    public AsyncRelayCommand CommitCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -132,6 +145,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _backups = new ProjectBackupService(_git, _operationJournal);
         _restores = new ProjectRestoreService(_git, _backups);
         _publisher = new RepositoryPublishService(_git, _operationJournal, _operationLock);
+        _gitWorkflow = new RepositoryGitWorkflowService(_git, _operationJournal, _operationLock);
         ChangeWorkspaceCommand = new RelayCommand(ChooseWorkspace);
         CloneCommand = new AsyncRelayCommand(CloneAsync, CanClone);
         BackupCommand = new AsyncRelayCommand(BackupSelectedAsync, () => CanRunSensitive() && SelectedProject is not null);
@@ -154,6 +168,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
             () => CanRunSensitive() && _lifecycle is not null && SelectedProject is not null);
         PushCommand = new AsyncRelayCommand(PushSelectedAsync,
             () => CanRunSensitive() && SelectedProject is not null && SelectedProject.Availability == "Available");
+        FetchCommand = new AsyncRelayCommand(FetchSelectedAsync, CanRunGitWorkflow);
+        PullCommand = new AsyncRelayCommand(PullSelectedAsync, CanRunGitWorkflow);
+        CommitCommand = new AsyncRelayCommand(CommitSelectedAsync,
+            () => CanRunGitWorkflow() && !string.IsNullOrWhiteSpace(CommitMessage));
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
 
@@ -164,6 +182,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private bool CanClone() => CloneCommandGate.CanExecute(_catalog is not null, _journalUsable, RepositoryUrl);
     private bool CanRunSensitive() => _catalog is not null && !_sensitiveOperationsLimited;
+    private bool CanRunGitWorkflow() => CanRunSensitive() && SelectedProject is not null && SelectedProject.Availability == "Available";
 
     public async Task InitializeAsync()
     {
@@ -214,6 +233,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ArchiveProjectCommand.NotifyCanExecuteChanged();
             RestoreArchivedCommand.NotifyCanExecuteChanged();
             PushCommand.NotifyCanExecuteChanged();
+            FetchCommand.NotifyCanExecuteChanged();
+            PullCommand.NotifyCanExecuteChanged();
+            CommitCommand.NotifyCanExecuteChanged();
         }
         catch (Exception ex)
         {
@@ -339,6 +361,70 @@ public sealed class MainViewModel : INotifyPropertyChanged
             StatusMessage = ex is InvalidOperationException
                 ? ex.Message
                 : "دریافت مخزن انجام نشد. جزئیات در گزارش فنی ذخیره شد.";
+        }
+    }
+
+    private async Task FetchSelectedAsync()
+    {
+        if (SelectedProject is null) return;
+        try
+        {
+            StatusMessage = "در حال دریافت اطلاعات شاخه‌های remote از GitHub...";
+            await _gitWorkflow.FetchAsync(SelectedProject);
+            StatusMessage = "Fetch با موفقیت انجام شد؛ فایل‌های محلی تغییر نکردند.";
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(WorkspacePath), "fetch", "fetch failed", ex);
+            StatusMessage = $"Fetch انجام نشد: {ex.Message}";
+        }
+    }
+
+    private async Task PullSelectedAsync()
+    {
+        var project = SelectedProject;
+        if (project is null) return;
+        if (MessageBox.Show(
+            "Pull فقط در صورت تمیز بودن Working Tree اجرا می‌شود و فقط Fast-Forward را می‌پذیرد؛ هیچ Merge Commit یا بازنویسی اجباری انجام نمی‌شود. ادامه می‌دهید؟",
+            "تأیید دریافت تغییرات GitHub", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        try
+        {
+            StatusMessage = "در حال Pull امن از GitHub...";
+            var result = await _gitWorkflow.PullAsync(project);
+            StatusMessage = $"Pull شاخه {result.Branch} موفق بود. Commit: {result.Commit[..Math.Min(8, result.Commit.Length)]}";
+            await RefreshProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(WorkspacePath), "pull", "pull failed", ex);
+            StatusMessage = $"Pull انجام نشد: {ex.Message}";
+        }
+    }
+
+    private async Task CommitSelectedAsync()
+    {
+        var project = SelectedProject;
+        if (project is null) return;
+        var message = CommitMessage.Trim();
+        if (MessageBox.Show(
+            $"تمام تغییرات فعلی مخزن {project.Owner}/{project.Repository} شامل فایل‌های جدید، ویرایش‌شده و حذف‌شده Stage و با پیام زیر Commit می‌شوند:\n\n{message}\n\nادامه می‌دهید؟",
+            "تأیید Commit", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+        try
+        {
+            StatusMessage = "در حال ثبت Commit محلی...";
+            var result = await _gitWorkflow.CommitAllAsync(project, message);
+            CommitMessage = "";
+            project.CurrentBranch = result.Branch;
+            project.CurrentCommit = result.Commit;
+            StatusMessage = $"Commit محلی ثبت شد: {result.Commit[..Math.Min(8, result.Commit.Length)]} — برای انتشار، Push را بزنید.";
+            await RefreshProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(WorkspacePath), "commit", "commit failed", ex);
+            StatusMessage = $"Commit انجام نشد: {ex.Message}";
         }
     }
 
