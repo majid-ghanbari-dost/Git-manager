@@ -9,40 +9,38 @@ using WpfMainWindow = GitManager.App.MainWindow;
 
 namespace GitManager.Tests;
 
-[Collection("WpfSta")]
 public sealed class WpfRuntimeTests
 {
-    [StaFact]
-    public void FrozenSolidColorBrush_ColorMutation_Throws()
+    [Fact]
+    public void FrozenSolidColorBrush_ColorMutation_Throws() => StaWpf.Run(() =>
     {
-        Assert.Equal(ApartmentState.STA, Thread.CurrentThread.GetApartmentState());
         var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4F6F9")!);
         brush.Freeze();
         Assert.True(brush.IsFrozen);
         Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
-    }
+    });
 
-    [StaFact]
-    public void AppResources_ThemeBrush_MutationThrowsWhenFrozen()
+    [Fact]
+    public void AppResources_ThemeBrush_MutationThrowsWhenFrozen() => StaWpf.Run(() =>
     {
         StaWpf.EnsureApp();
         var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
         if (brush.IsFrozen)
             Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
-    }
+    });
 
-    [StaFact]
-    public void SetBrush_ReplacesFrozenResource_DoesNotThrow()
+    [Fact]
+    public void SetBrush_ReplacesFrozenResource_DoesNotThrow() => StaWpf.Run(() =>
     {
         StaWpf.EnsureApp();
         WpfMainWindow.SetBrush("AppBackgroundBrush", "#111827");
         var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
         Assert.True(brush.IsFrozen);
         Assert.Equal((Color)ColorConverter.ConvertFromString("#111827")!, brush.Color);
-    }
+    });
 
-    [StaFact]
-    public void DrawingImage_AsWindowIcon_IsRecorded()
+    [Fact]
+    public void DrawingImage_AsWindowIcon_IsRecorded() => StaWpf.Run(() =>
     {
         StaWpf.EnsureApp();
         var logo = Assert.IsType<DrawingImage>(Application.Current.Resources["GitManagerLogo"]);
@@ -71,10 +69,10 @@ public sealed class WpfRuntimeTests
 
         if (caught is not null)
             StartupLog.Write("StartupException", "DrawingImage-as-Icon", caught);
-    }
+    });
 
-    [StaFact]
-    public void MainWindow_Show_ReachesLoaded_AndCloses()
+    [Fact]
+    public void MainWindow_Show_ReachesLoaded_AndCloses() => StaWpf.Run(() =>
     {
         StaWpf.EnsureApp();
         var workspace = Path.Combine(Path.GetTempPath(), "GitManagerWpfRuntimeTests", Guid.NewGuid().ToString("N"));
@@ -110,14 +108,43 @@ public sealed class WpfRuntimeTests
             else File.WriteAllText(settingsPath, previous);
             try { Directory.Delete(workspace, recursive: true); } catch { }
         }
-    }
+    });
 }
-
-[CollectionDefinition("WpfSta", DisableParallelization = true)]
-public sealed class WpfStaCollection;
 
 internal static class StaWpf
 {
+    private static readonly Dispatcher UiDispatcher;
+    private static readonly Thread UiThread;
+
+    static StaWpf()
+    {
+        Dispatcher? dispatcher = null;
+        using var started = new ManualResetEventSlim(false);
+        UiThread = new Thread(() =>
+        {
+            dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+            started.Set();
+            System.Windows.Threading.Dispatcher.Run();
+        });
+        UiThread.Name = "GitManager-Wpf-STA";
+        UiThread.SetApartmentState(ApartmentState.STA);
+        UiThread.IsBackground = true;
+        UiThread.Start();
+        started.Wait();
+        UiDispatcher = dispatcher!;
+    }
+
+    public static void Run(Action action)
+    {
+        Exception? caught = null;
+        UiDispatcher.Invoke(() =>
+        {
+            try { action(); }
+            catch (Exception ex) { caught = ex; }
+        });
+        if (caught is not null) throw caught;
+    }
+
     public static WpfApp EnsureApp()
     {
         if (Application.Current is WpfApp existing)
