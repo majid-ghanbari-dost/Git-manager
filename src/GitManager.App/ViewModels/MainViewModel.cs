@@ -13,9 +13,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly SettingsService _settings;
     private readonly ProjectOperationJournal _operationJournal;
     private readonly GitProcess _git;
-    private readonly ProjectOperationLock? _operationLock;
+    private readonly ProjectOperationLock _operationLock;
     private readonly ProjectBackupService _backups;
     private readonly ProjectRestoreService _restores;
+    private readonly RepositoryPublishService _publisher;
     private ProjectCatalog? _catalog;
     private RepositoryImportService? _importer;
     private CategoryManagementService? _categoryManagement;
@@ -82,6 +83,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             MoveToOnHoldCommand.NotifyCanExecuteChanged();
             ArchiveProjectCommand.NotifyCanExecuteChanged();
             RestoreArchivedCommand.NotifyCanExecuteChanged();
+            PushCommand.NotifyCanExecuteChanged();
         }
     }
     public string SearchText
@@ -109,6 +111,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public AsyncRelayCommand MoveToOnHoldCommand { get; }
     public AsyncRelayCommand ArchiveProjectCommand { get; }
     public AsyncRelayCommand RestoreArchivedCommand { get; }
+    public AsyncRelayCommand PushCommand { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -125,9 +128,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _settings = settings;
         _operationJournal = journal;
         _git = git;
-        _operationLock = operationLock;
+        _operationLock = operationLock ?? new ProjectOperationLock();
         _backups = new ProjectBackupService(_git, _operationJournal);
         _restores = new ProjectRestoreService(_git, _backups);
+        _publisher = new RepositoryPublishService(_git, _operationJournal, _operationLock);
         ChangeWorkspaceCommand = new RelayCommand(ChooseWorkspace);
         CloneCommand = new AsyncRelayCommand(CloneAsync, CanClone);
         BackupCommand = new AsyncRelayCommand(BackupSelectedAsync, () => CanRunSensitive() && SelectedProject is not null);
@@ -148,6 +152,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             () => CanRunSensitive() && _lifecycle is not null && SelectedProject is not null);
         RestoreArchivedCommand = new AsyncRelayCommand(() => ChangeLifecycleAsync(LifecycleState.Active),
             () => CanRunSensitive() && _lifecycle is not null && SelectedProject is not null);
+        PushCommand = new AsyncRelayCommand(PushSelectedAsync,
+            () => CanRunSensitive() && SelectedProject is not null && SelectedProject.Availability == "Available");
         Projects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ProjectCount));
     }
 
@@ -207,6 +213,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             MoveToOnHoldCommand.NotifyCanExecuteChanged();
             ArchiveProjectCommand.NotifyCanExecuteChanged();
             RestoreArchivedCommand.NotifyCanExecuteChanged();
+            PushCommand.NotifyCanExecuteChanged();
         }
         catch (Exception ex)
         {
@@ -332,6 +339,36 @@ public sealed class MainViewModel : INotifyPropertyChanged
             StatusMessage = ex is InvalidOperationException
                 ? ex.Message
                 : "دریافت مخزن انجام نشد. جزئیات در گزارش فنی ذخیره شد.";
+        }
+    }
+
+    private async Task PushSelectedAsync()
+    {
+        var project = SelectedProject;
+        if (project is null) return;
+
+        var confirmation = MessageBox.Show(
+            $"شاخه فعلی پروژه {project.Owner}/{project.Repository} به origin در GitHub ارسال می‌شود.\n\n" +
+            "فقط Commitها ارسال می‌شوند؛ تغییرات Commit‌نشده روی رایانه باقی می‌مانند. " +
+            "این عملیات Force Push نیست و تاریخچه remote را بازنویسی نمی‌کند.\n\nادامه می‌دهید؟",
+            "تأیید ارسال به GitHub", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirmation != MessageBoxResult.Yes) return;
+
+        try
+        {
+            StatusMessage = $"در حال ارسال شاخه {project.CurrentBranch} به GitHub...";
+            var result = await _publisher.PushAsync(project);
+            StatusMessage = $"Push شاخه {result.Branch} با موفقیت انجام شد. Commit: {result.Commit[..Math.Min(8, result.Commit.Length)]}" +
+                (result.HasUncommittedChanges
+                    ? " — توجه: تغییرات Commit‌نشده فقط روی همین رایانه باقی ماندند."
+                    : "");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(DiagnosticLog.DirectoryFor(WorkspacePath), "push", "push operation failed", ex);
+            StatusMessage = ex is InvalidOperationException or TimeoutException
+                ? $"ارسال انجام نشد: {ex.Message}"
+                : "ارسال به GitHub ناموفق بود؛ نتیجه remote را بررسی کنید. جزئیات در گزارش فنی ذخیره شد.";
         }
     }
 

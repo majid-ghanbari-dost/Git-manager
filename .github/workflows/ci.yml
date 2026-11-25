@@ -60,7 +60,7 @@ jobs:
           }
 
           $iss = Join-Path $PWD "installer\GitManager.iss"
-          $compileOutput = & $iscc "/DMyAppVersion=2.4.0" "/DPublishDir=$publishDir" $iss 2>&1
+          $compileOutput = & $iscc "/DMyAppVersion=2.5.4" "/DPublishDir=$publishDir" $iss 2>&1
           $isccExit = $LASTEXITCODE
           $compileOutput | Set-Content -LiteralPath $compileLog -Encoding utf8
           $compileOutput | Write-Host

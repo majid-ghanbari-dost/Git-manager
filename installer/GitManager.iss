@@ -3,7 +3,7 @@
 ; outside {app}. Do not add UninstallDelete or InstallDelete sections.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "2.4.0"
+  #define MyAppVersion "2.5.4"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\artifacts\GitManager-win-x64"
