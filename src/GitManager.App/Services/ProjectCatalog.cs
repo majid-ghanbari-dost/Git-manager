@@ -539,6 +539,23 @@ public sealed class ProjectCatalog
         transaction.Commit();
     }
 
+    public async Task UpdateGitSnapshotAsync(string projectId, string currentBranch, string currentCommit)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE projects
+            SET current_branch = $branch, current_commit = $commit
+            WHERE project_id = $id
+            """;
+        command.Parameters.AddWithValue("$branch", currentBranch);
+        command.Parameters.AddWithValue("$commit", currentCommit);
+        command.Parameters.AddWithValue("$id", projectId);
+        if (await command.ExecuteNonQueryAsync() != 1)
+            throw new InvalidOperationException("پروژه برای به‌روزرسانی شاخه و Commit پیدا نشد.");
+    }
+
     public async Task UpdateAvailabilityAsync(string projectId, string availability, DateTime? lastSeenUtc, string? status = null)
     {
         await using var connection = new SqliteConnection(_connectionString);
