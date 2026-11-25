@@ -36,6 +36,10 @@ public sealed class RepositoryPublishService
         if (!Directory.Exists(gitDirectory) && !File.Exists(gitDirectory))
             throw new InvalidOperationException("پوشه انتخاب‌شده یک مخزن Git معتبر نیست.");
 
+        await _journal.EnsureAvailableAsync(cancellationToken);
+        var operationKey = "repository-git:" + project.ProjectId;
+        await using var lease = await _operationLock.AcquireAsync(operationKey, cancellationToken);
+
         if (File.Exists(Path.Combine(gitDirectory, "index.lock")))
             throw new InvalidOperationException("قفل Git فعال است؛ پس از بسته‌شدن ابزارهای Git دوباره تلاش کنید.");
 
@@ -67,9 +71,6 @@ public sealed class RepositoryPublishService
         var hasUncommittedChanges = !string.IsNullOrWhiteSpace(porcelain);
         var commit = await _git.RunAsync(project.RepositoryPath, cancellationToken, "rev-parse", "HEAD");
 
-        await _journal.EnsureAvailableAsync(cancellationToken);
-        var operationKey = "repository-git:" + project.ProjectId;
-        await using var lease = await _operationLock.AcquireAsync(operationKey, cancellationToken);
         var operation = await _journal.BeginAsync("Push", operationKey, project.ProjectId,
             project.RepositoryPath, project.RepositoryPath, cancellationToken);
 
