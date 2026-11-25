@@ -68,7 +68,7 @@ public sealed class RepositoryPublishService
         var commit = await _git.RunAsync(project.RepositoryPath, cancellationToken, "rev-parse", "HEAD");
 
         await _journal.EnsureAvailableAsync(cancellationToken);
-        var operationKey = "push:" + project.ProjectId;
+        var operationKey = "repository-git:" + project.ProjectId;
         await using var lease = await _operationLock.AcquireAsync(operationKey, cancellationToken);
         var operation = await _journal.BeginAsync("Push", operationKey, project.ProjectId,
             project.RepositoryPath, project.RepositoryPath, cancellationToken);
