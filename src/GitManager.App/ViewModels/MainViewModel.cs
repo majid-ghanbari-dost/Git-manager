@@ -189,8 +189,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         var saved = await _settings.LoadWorkspaceAsync();
         if (!string.IsNullOrWhiteSpace(saved) && Directory.Exists(saved))
             await SetWorkspaceAsync(saved);
-        else
+        else if (Environment.UserInteractive)
             ChooseWorkspace();
+        else
+            StartupLog.Write("StartupException", "OpenFolderDialog skipped in a non-interactive session");
     }
 
     private void ChooseWorkspace()

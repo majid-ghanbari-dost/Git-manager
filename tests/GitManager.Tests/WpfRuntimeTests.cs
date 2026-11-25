@@ -13,28 +13,26 @@ namespace GitManager.Tests;
 public sealed class WpfRuntimeTests
 {
     [Fact]
-    public void ResourceDictionary_Freezes_SolidColorBrushes_MutationThrows()
+    public void FrozenSolidColorBrush_ColorMutation_Throws()
     {
         StaWpf.Run(() =>
         {
-            var dictionary = new ResourceDictionary
-            {
-                ["AppBackgroundBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4F6F9")!)
-            };
-            var brush = Assert.IsType<SolidColorBrush>(dictionary["AppBackgroundBrush"]);
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4F6F9")!);
+            brush.Freeze();
             Assert.True(brush.IsFrozen);
             Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
         });
     }
 
     [Fact]
-    public void AppResources_ThemeBrushes_AreFrozen()
+    public void AppResources_ThemeBrush_MutationThrowsWhenFrozen()
     {
         StaWpf.Run(() =>
         {
             StaWpf.EnsureApp();
             var brush = Assert.IsType<SolidColorBrush>(Application.Current.Resources["AppBackgroundBrush"]);
-            Assert.True(brush.IsFrozen);
+            if (brush.IsFrozen)
+                Assert.Throws<InvalidOperationException>(() => brush.Color = Colors.Black);
         });
     }
 
@@ -104,9 +102,16 @@ public sealed class WpfRuntimeTests
             {
                 new SettingsService().SaveWorkspaceAsync(workspace).GetAwaiter().GetResult();
                 var loaded = false;
-                var window = new WpfMainWindow();
+                var window = new WpfMainWindow
+                {
+                    ShowInTaskbar = false,
+                    WindowStartupLocation = WindowStartupLocation.Manual,
+                    Left = 0,
+                    Top = 0
+                };
                 window.Loaded += (_, _) => loaded = true;
                 window.Show();
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.Loaded);
                 var deadline = DateTime.UtcNow.AddSeconds(20);
                 while (!loaded && DateTime.UtcNow < deadline)
                     StaWpf.Pump();

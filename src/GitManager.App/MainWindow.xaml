@@ -1,7 +1,7 @@
 <Window x:Class="GitManager.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Git Manager" Icon="pack://application:,,,/Assets/GitManager.ico" Height="760" Width="1180" MinHeight="600" MinWidth="900" WindowStyle="None" ResizeMode="CanResize"
+        Title="Git Manager" Icon="pack://application:,,,/GitManager;component/Assets/GitManager.ico" Height="760" Width="1180" MinHeight="600" MinWidth="900" WindowStyle="None" ResizeMode="CanResize"
         FlowDirection="RightToLeft" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackgroundBrush}">
     <Grid Margin="0">
