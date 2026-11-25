@@ -26,9 +26,9 @@ public sealed class RepositoryGitWorkflowService
 
     public async Task FetchAsync(ProjectRecord project, CancellationToken cancellationToken = default)
     {
-        var remote = await ValidateRepositoryAsync(project, requireCredentialManager: true, cancellationToken);
         await RunJournaledAsync(project, "Fetch", async () =>
         {
+            var remote = await ValidateRepositoryAsync(project, requireCredentialManager: true, cancellationToken);
             await _git.RunAsync(project.RepositoryPath, cancellationToken, "fetch", "--prune", "origin");
             return remote.CanonicalUrl;
         }, cancellationToken);
@@ -36,14 +36,13 @@ public sealed class RepositoryGitWorkflowService
 
     public async Task<RepositoryGitResult> PullAsync(ProjectRecord project, CancellationToken cancellationToken = default)
     {
-        await ValidateRepositoryAsync(project, requireCredentialManager: true, cancellationToken);
-        var branch = await GetCurrentBranchAsync(project, cancellationToken);
-        var status = await _git.RunAsync(project.RepositoryPath, cancellationToken, "status", "--porcelain=v1");
-        if (!string.IsNullOrWhiteSpace(status))
-            throw new InvalidOperationException("برای Pull ابتدا تغییرات محلی را Commit کنید یا از آن‌ها پشتیبان بگیرید؛ Pull روی مخزن دارای تغییرات محلی مسدود شد.");
-
         return await RunJournaledAsync(project, "Pull", async () =>
         {
+            await ValidateRepositoryAsync(project, requireCredentialManager: true, cancellationToken);
+            var branch = await GetCurrentBranchAsync(project, cancellationToken);
+            var status = await _git.RunAsync(project.RepositoryPath, cancellationToken, "status", "--porcelain=v1");
+            if (!string.IsNullOrWhiteSpace(status))
+                throw new InvalidOperationException("برای Pull ابتدا تغییرات محلی را Commit کنید یا از آن‌ها پشتیبان بگیرید؛ Pull روی مخزن دارای تغییرات محلی مسدود شد.");
             await _git.RunAsync(project.RepositoryPath, cancellationToken,
                 "pull", "--ff-only", "origin", branch);
             var commit = await _git.RunAsync(project.RepositoryPath, cancellationToken, "rev-parse", "HEAD");
@@ -56,18 +55,17 @@ public sealed class RepositoryGitWorkflowService
         string message,
         CancellationToken cancellationToken = default)
     {
-        EnsureRepository(project);
         var normalizedMessage = (message ?? "").Trim();
         if (normalizedMessage.Length is < 3 or > 120 || normalizedMessage.Any(char.IsControl))
             throw new InvalidOperationException("پیام Commit باید بین ۳ تا ۱۲۰ نویسه و بدون نویسه کنترلی باشد.");
 
-        var branch = await GetCurrentBranchAsync(project, cancellationToken);
-        var before = await _git.RunAsync(project.RepositoryPath, cancellationToken, "status", "--porcelain=v1");
-        if (string.IsNullOrWhiteSpace(before))
-            throw new InvalidOperationException("تغییری برای Commit وجود ندارد.");
-
         return await RunJournaledAsync(project, "Commit", async () =>
         {
+            EnsureRepository(project);
+            var branch = await GetCurrentBranchAsync(project, cancellationToken);
+            var before = await _git.RunAsync(project.RepositoryPath, cancellationToken, "status", "--porcelain=v1");
+            if (string.IsNullOrWhiteSpace(before))
+                throw new InvalidOperationException("تغییری برای Commit وجود ندارد.");
             await _git.RunAsync(project.RepositoryPath, cancellationToken, "add", "--all");
             var staged = await _git.RunAsync(project.RepositoryPath, cancellationToken, "status", "--porcelain=v1");
             if (string.IsNullOrWhiteSpace(staged))
