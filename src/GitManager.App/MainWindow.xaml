@@ -1,7 +1,7 @@
 <Window x:Class="GitManager.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Git Manager" Height="760" Width="1180" MinHeight="600" MinWidth="900" WindowStyle="None" ResizeMode="CanResize"
+        Title="Git Manager" Icon="{StaticResource GitManagerLogo}" Height="760" Width="1180" MinHeight="600" MinWidth="900" WindowStyle="None" ResizeMode="CanResize"
         FlowDirection="RightToLeft" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackgroundBrush}">
     <Grid Margin="0">
@@ -15,9 +15,7 @@
         <Grid Grid.Row="0" FlowDirection="LeftToRight" Background="#172334" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" FlowDirection="LeftToRight" VerticalAlignment="Center" Margin="16,0">
-                <Border Width="25" Height="25" CornerRadius="7" Background="#4F8CFF" Margin="0,0,9,0">
-                    <TextBlock Text="G" Foreground="White" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+                <Image Source="{StaticResource GitManagerLogo}" Width="25" Height="25" Margin="0,0,9,0"/>
                 <TextBlock Text="Git Manager" Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" FlowDirection="LeftToRight">
@@ -96,6 +94,7 @@
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="پروژه‌های کتابخانه" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <Button Content="ارسال به GitHub" Command="{Binding PushCommand}" ToolTip="ارسال Commitهای شاخه فعلی به origin با Git Credential Manager؛ بدون Force Push" Margin="16,0,0,0" Padding="12,5"/>
                             <Button Content="پشتیبان‌گیری + SHA-256" Command="{Binding BackupCommand}" Margin="16,0,0,0" Padding="12,5"/>
                             <Button Content="انتقال پروژه به دسته انتخاب‌شده" Command="{Binding MoveProjectCommand}" Margin="8,0,0,0" Padding="12,5"/>
                             <Button Content="بازیابی پشتیبان" Command="{Binding RestoreCommand}" Margin="8,0,0,0" Padding="12,5"/>
