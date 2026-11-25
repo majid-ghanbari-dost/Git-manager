@@ -110,6 +110,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts/install-evidence | Out-Null
+          Set-Content -LiteralPath artifacts/install-evidence/smoke-begin.txt -Value "smoke started $(Get-Date -Format o)" -Encoding utf8
           & "$PWD\scripts\ci-install-smoke.ps1" `
             -SetupExe "$PWD\artifacts\GitManager-Setup-x64.exe" `
             -ReportPath "$PWD\artifacts\install-evidence\install-uninstall-report.md" `
@@ -129,21 +130,21 @@ jobs:
             artifacts/inno-compile.log
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: always()
         with:
           name: git-manager-installer-x64
           path: |
             artifacts/GitManager-Setup-x64.exe
             artifacts/GitManager-Setup-x64.exe.sha256
-          if-no-files-found: error
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: always()
         with:
           name: git-manager-portable-x64
           path: |
             artifacts/GitManager-win-x64-portable.zip
             artifacts/GitManager-win-x64-portable.zip.sha256
-          if-no-files-found: error
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: success()
         with:

@@ -1,7 +1,9 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using GitManager.App.Services;
 using GitManager.App.ViewModels;
 
@@ -16,8 +18,54 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        try
+        {
+            var icon = LoadWindowIcon();
+            if (icon is not null) Icon = icon;
+        }
+        catch (Exception ex)
+        {
+            StartupLog.Write("StartupException", "Window.Icon", ex);
+        }
         DataContext = _viewModel;
         Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// Pack URIs can throw in single-file publish because Assembly.Location is empty.
+    /// Load the Win32 ICO from an embedded stream or a file next to the executable.
+    /// </summary>
+    internal static ImageSource? LoadWindowIcon()
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        var resource = assembly.GetManifestResourceNames()
+            .FirstOrDefault(name => name.EndsWith("GitManager.ico", StringComparison.OrdinalIgnoreCase));
+        if (resource is not null)
+        {
+            using var stream = assembly.GetManifestResourceStream(resource);
+            if (stream is not null) return FrameFromStream(stream);
+        }
+
+        foreach (var candidate in new[]
+                 {
+                     Path.Combine(AppContext.BaseDirectory, "Assets", "GitManager.ico"),
+                     Path.Combine(AppContext.BaseDirectory, "GitManager.ico")
+                 })
+        {
+            if (!File.Exists(candidate)) continue;
+            using var stream = File.OpenRead(candidate);
+            return FrameFromStream(stream);
+        }
+
+        return null;
+    }
+
+    private static BitmapFrame FrameFromStream(Stream stream)
+    {
+        var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        copy.Position = 0;
+        return BitmapDecoder.Create(copy, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

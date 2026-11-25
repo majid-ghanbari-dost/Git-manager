@@ -42,6 +42,15 @@ function Invoke-LoggedProcess {
     }
 }
 
+function Save-StartupLogEvidence([string]$EvidenceName) {
+    $startupLog = Join-Path $env:LOCALAPPDATA "GitManager\logs\startup.log"
+    if (Test-Path -LiteralPath $startupLog) {
+        Copy-Item -LiteralPath $startupLog -Destination (Join-Path $script:LogDirectory $EvidenceName) -Force
+        return (Get-Content -LiteralPath $startupLog -Raw)
+    }
+    return ""
+}
+
 function Invoke-UiRuntimeSmoke {
     param(
         [Parameter(Mandatory = $true)][string]$Exe,
@@ -56,39 +65,43 @@ function Invoke-UiRuntimeSmoke {
 
     @{ WorkspacePath = $Workspace } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:LOCALAPPDATA "GitManager\settings.json") -Encoding utf8
 
-    $proc = Start-Process -FilePath $Exe -PassThru
-    if ($null -eq $proc) { throw "$Label failed to start." }
+    $exeDir = Split-Path -LiteralPath $Exe
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.FileName = $Exe
+    $process.StartInfo.WorkingDirectory = $exeDir
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.CreateNoWindow = $false
+    if (-not $process.Start()) { throw "$Label failed to start $Exe" }
+
     $start = Get-Date
     while (((Get-Date) - $start).TotalSeconds -lt $AliveSeconds) {
         Start-Sleep -Seconds 2
-        $proc.Refresh()
-        if ($proc.HasExited) {
-            $logTail = ""
-            if (Test-Path -LiteralPath $startupLog) { $logTail = Get-Content -LiteralPath $startupLog -Raw }
-            throw "$Label exited after $([int](((Get-Date) - $start).TotalSeconds))s with code $($proc.ExitCode). startup.log:`n$logTail"
+        $process.Refresh()
+        if ($process.HasExited) {
+            $logTail = Save-StartupLogEvidence $EvidenceName
+            throw "$Label exited after $([int](((Get-Date) - $start).TotalSeconds))s with code $($process.ExitCode). startup.log:`n$logTail"
         }
     }
 
-    if (-not (Test-Path -LiteralPath $startupLog)) {
+    $log = Save-StartupLogEvidence $EvidenceName
+    if ([string]::IsNullOrWhiteSpace($log)) {
         throw "$Label: startup.log was not created at $startupLog"
     }
-    $log = Get-Content -LiteralPath $startupLog -Raw
-    Copy-Item -LiteralPath $startupLog -Destination (Join-Path $LogDirectory $EvidenceName) -Force
     if ($log -notmatch "MainWindowLoaded") {
         throw "$Label: MainWindowLoaded was not recorded. startup.log:`n$log"
     }
 
-    $proc.Refresh()
+    $process.Refresh()
     $closed = $false
-    if ($proc.MainWindowHandle -ne [IntPtr]::Zero) {
-        $closed = $proc.CloseMainWindow()
+    if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
+        $closed = $process.CloseMainWindow()
     }
-    if (-not $proc.WaitForExit(20000)) {
-        try { $proc.Kill($true) } catch { }
-        try { [void]$proc.WaitForExit(5000) } catch { }
-        throw "$Label did not exit after CloseMainWindow (handle=$($proc.MainWindowHandle), CloseMainWindow=$closed)."
+    if (-not $process.WaitForExit(20000)) {
+        try { $process.Kill($true) } catch { }
+        try { [void]$process.WaitForExit(5000) } catch { }
+        throw "$Label did not exit after CloseMainWindow (handle=$($process.MainWindowHandle), CloseMainWindow=$closed). startup.log:`n$log"
     }
-    $report.Add("$Label: stayed alive ${AliveSeconds}s, MainWindowLoaded recorded, exit $($proc.ExitCode), CloseMainWindow=$closed.")
+    $script:report.Add("$Label: stayed alive ${AliveSeconds}s, MainWindowLoaded recorded, exit $($process.ExitCode), CloseMainWindow=$closed.")
 }
 
 function Assert-PathExists([string]$Path, [string]$Why) {

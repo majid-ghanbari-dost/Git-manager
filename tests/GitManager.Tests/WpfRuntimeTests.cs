@@ -30,6 +30,13 @@ public sealed class WpfRuntimeTests
     });
 
     [Fact]
+    public void LoadWindowIcon_DoesNotThrow_AndReturnsFrame() => StaWpf.Run(() =>
+    {
+        var icon = WpfMainWindow.LoadWindowIcon();
+        Assert.NotNull(icon);
+    });
+
+    [Fact]
     public void SetBrush_ReplacesFrozenResource_DoesNotThrow() => StaWpf.Run(() =>
     {
         StaWpf.EnsureApp();
