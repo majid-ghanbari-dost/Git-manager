@@ -105,6 +105,12 @@
                             <TextBlock Text="جست‌وجو" VerticalAlignment="Center" Margin="16,0,8,0"/>
                             <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="180" Padding="6"/>
                         </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBox Text="{Binding CommitMessage, UpdateSourceTrigger=PropertyChanged}" Width="230" Padding="6" ToolTip="پیام Commit؛ تمام تغییرات محلی پس از تأیید Stage می‌شوند" />
+                            <Button Content="Commit محلی" Command="{Binding CommitCommand}" Padding="10,5"/>
+                            <Button Content="Fetch" Command="{Binding FetchCommand}" Padding="10,5"/>
+                            <Button Content="Pull امن" Command="{Binding PullCommand}" Padding="10,5" ToolTip="فقط Fast-Forward؛ مخزن باید تغییرات Commit‌نشده نداشته باشد"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <Button Content="انتقال به فعال" Command="{Binding MoveToActiveCommand}" Padding="10,5" Margin="0,0,6,0"/>
                             <Button Content="انتقال به معلق" Command="{Binding MoveToOnHoldCommand}" Padding="10,5" Margin="0,0,6,0"/>
