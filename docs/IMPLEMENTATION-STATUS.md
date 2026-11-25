@@ -86,8 +86,10 @@ This work is not merged to `main`. Later 2.5.1 commits include mid-Clone error p
 - `Loaded` errors are logged and do not take down the process unhandled.
 - Window placement falls back to Manual 0,0 when screen metrics are unusable (production still uses CenterScreen in XAML).
 - STA WPF test constructs `MainWindow`, `Show()`, waits for `Loaded`, and closes — **passed** on Windows CI `08e4f8b` / run `45633358477`.
-- Installed smoke without `--ci-smoke` is implemented but **failed** on that same run. Exception text was not retrieved. Later runs (`746d97d`, `60d6c67`, `fdab8ed`) **did not start** (GitHub Actions billing / spending limit) — that is not a smoke result.
-- Product version **2.5.6**. Separate installer and portable artifacts. SHA-256 for a **green** smoke run does not exist. Not Product Owner–ready.
+- Installed smoke without `--ci-smoke` is implemented but **failed** on that same run. Exception text was not retrieved.
+- CI `45647609619` (HEAD `5e49a47`) **did not start the job** (billing / spending limit). Empty `steps[]`, no artifacts. That is not a smoke, build, or install result.
+- Evidence artifacts are named `…-{run_id}-{job.status}` and upload `if: always()` **when the job starts**. A refused job still cannot upload.
+- Product version **2.5.6**. Separate installer and portable artifacts. SHA-256 for a **green** smoke run does not exist. **NOT READY** for Product Owner install.
 - See [WP-2.5.6-DELIVERY-REPORT.md](WP-2.5.6-DELIVERY-REPORT.md).
 - Do not merge until installed UI smoke (30s alive + `MainWindowLoaded` + restart) passes.
 

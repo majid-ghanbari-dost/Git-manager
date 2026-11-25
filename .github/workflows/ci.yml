@@ -15,6 +15,36 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Record runner environment
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/install-evidence | Out-Null
+          $osCaption = ""
+          $osVersion = ""
+          try {
+            $os = Get-CimInstance -ClassName Win32_OperatingSystem
+            $osCaption = $os.Caption
+            $osVersion = "$($os.Version) $($os.OSArchitecture)"
+          } catch { }
+          @(
+            "utc=$(Get-Date -Format o)"
+            "run_id=$env:GITHUB_RUN_ID"
+            "run_attempt=$env:GITHUB_RUN_ATTEMPT"
+            "sha=$env:GITHUB_SHA"
+            "ref=$env:GITHUB_REF"
+            "event=$env:GITHUB_EVENT_NAME"
+            "computer=$env:COMPUTERNAME"
+            "os=$([Environment]::OSVersion)"
+            "osCaption=$osCaption"
+            "osCim=$osVersion"
+            "os64=$([Environment]::Is64BitOperatingSystem)"
+            "interactive=$([Environment]::UserInteractive)"
+            "session=$env:SESSIONNAME"
+            "clr=$([Environment]::Version)"
+          ) | Set-Content artifacts/install-evidence/runner-env.txt -Encoding utf8
+          Set-Content artifacts/install-evidence/windows-version.txt -Value @($osCaption, $osVersion, [Environment]::OSVersion.ToString()) -Encoding utf8
+          try { & dotnet --info 2>&1 | Out-File artifacts/install-evidence/dotnet-info.txt -Encoding utf8 } catch { "$_" | Out-File artifacts/install-evidence/dotnet-info.txt -Encoding utf8 }
       - name: Restore
         run: dotnet restore src/GitManager.App/GitManager.App.csproj
       - name: Build
@@ -118,13 +148,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: git-manager-wp-2-4-test-results
+          name: git-manager-test-results-${{ github.run_id }}-${{ job.status }}
           path: artifacts/test-results/
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: git-manager-wp-2-4-install-evidence
+          name: git-manager-install-evidence-${{ github.run_id }}-${{ job.status }}
           path: |
             artifacts/install-evidence/
             artifacts/inno-compile.log
@@ -132,7 +162,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: git-manager-installer-x64
+          name: git-manager-installer-x64-${{ github.run_id }}-${{ job.status }}
           path: |
             artifacts/GitManager-Setup-x64.exe
             artifacts/GitManager-Setup-x64.exe.sha256
@@ -140,7 +170,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: git-manager-portable-x64
+          name: git-manager-portable-x64-${{ github.run_id }}-${{ job.status }}
           path: |
             artifacts/GitManager-win-x64-portable.zip
             artifacts/GitManager-win-x64-portable.zip.sha256
@@ -148,7 +178,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: git-manager-wp-2-4-source-handoff
+          name: git-manager-wp-2-4-source-handoff-${{ github.run_id }}-${{ job.status }}
           path: |
             artifacts/GitManager-WP-2.4-Handoff.zip
             artifacts/GitManager-WP-2.4-Handoff.zip.sha256
