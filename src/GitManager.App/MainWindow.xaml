@@ -12,11 +12,11 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Grid Grid.Row="0" FlowDirection="LeftToRight" Background="#E9EEF5" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+        <Grid Grid.Row="0" FlowDirection="LeftToRight" Background="{DynamicResource TitleBarBrush}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" FlowDirection="LeftToRight" VerticalAlignment="Center" Margin="16,0">
                 <Image Source="{StaticResource GitManagerLogo}" Width="25" Height="25" Margin="0,0,9,0"/>
-                <TextBlock Text="Git Manager" Foreground="#000000" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock Text="Git Manager" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" FlowDirection="LeftToRight">
                 <ComboBox x:Name="ThemeSelector" Width="118" Height="28" Margin="0,8,10,8" SelectedIndex="0" SelectionChanged="ThemeSelector_SelectionChanged">

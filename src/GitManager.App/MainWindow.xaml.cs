@@ -129,16 +129,17 @@ public partial class MainWindow : Window
 
     private void ApplyTheme(string mode)
     {
-        // Keep a high-contrast light palette across the entire app.
-        // In particular, ComboBox popup items must never inherit white text
-        // from the Windows dark application theme while their popup is white.
-        SetBrush("AppBackgroundBrush", "#F4F6F9");
-        SetBrush("SurfaceBrush", "#FFFFFF");
-        SetBrush("PrimaryTextBrush", "#000000");
-        SetBrush("SecondaryTextBrush", "#000000");
-        SetBrush("InputBackgroundBrush", "#FFFFFF");
-        SetBrush("InputForegroundBrush", "#000000");
-        SetBrush("GridLineBrush", "#E3E8EF");
+        // Keep every control on the same palette. System currently follows the
+        // light palette; Light and Dark are explicit, persisted user choices.
+        var dark = mode == "Dark";
+        SetBrush("AppBackgroundBrush", dark ? "#171A21" : "#F4F6F9");
+        SetBrush("SurfaceBrush", dark ? "#222733" : "#FFFFFF");
+        SetBrush("PrimaryTextBrush", dark ? "#F1F4F8" : "#202632");
+        SetBrush("SecondaryTextBrush", dark ? "#B7C0CE" : "#596579");
+        SetBrush("InputBackgroundBrush", dark ? "#171D27" : "#FFFFFF");
+        SetBrush("InputForegroundBrush", dark ? "#F1F4F8" : "#202632");
+        SetBrush("GridLineBrush", dark ? "#3A4352" : "#D7DEE8");
+        SetBrush("TitleBarBrush", dark ? "#202733" : "#E9EEF5");
     }
 
     internal static void SetBrush(string key, string color)
