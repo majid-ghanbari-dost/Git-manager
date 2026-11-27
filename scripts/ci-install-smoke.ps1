@@ -74,16 +74,16 @@ function Write-ProcessSnapshot {
 
 function Assert-NoCriticalStartupFailure([string]$Label, [string]$Log) {
     if ($Log -match "AppDomainUnhandledException") {
-        throw "$Label: AppDomainUnhandledException in startup.log:`n$Log"
+        throw "${Label}: AppDomainUnhandledException in startup.log:`n$Log"
     }
     if ($Log -match "DispatcherUnhandledException") {
-        throw "$Label: DispatcherUnhandledException in startup.log:`n$Log"
+        throw "${Label}: DispatcherUnhandledException in startup.log:`n$Log"
     }
     $critical = $Log -split "`r?`n" | Where-Object {
         $_ -match "StartupException" -and $_ -notmatch "OpenFolderDialog skipped"
     }
     if ($critical) {
-        throw "$Label: StartupException in startup.log:`n$Log"
+        throw "${Label}: StartupException in startup.log:`n$Log"
     }
 }
 
@@ -124,10 +124,10 @@ function Invoke-UiRuntimeSmoke {
 
     $log = Save-StartupLogEvidence $EvidenceName
     if ([string]::IsNullOrWhiteSpace($log)) {
-        throw "$Label: startup.log was not created at $startupLog"
+        throw "${Label}: startup.log was not created at $startupLog"
     }
     if ($log -notmatch "MainWindowLoaded") {
-        throw "$Label: MainWindowLoaded was not recorded. startup.log:`n$log"
+        throw "${Label}: MainWindowLoaded was not recorded. startup.log:`n$log"
     }
     Assert-NoCriticalStartupFailure $Label $log
 
@@ -146,7 +146,7 @@ function Invoke-UiRuntimeSmoke {
     if ($process.ExitCode -ne 0) {
         throw "$Label exited with code $($process.ExitCode) after CloseMainWindow. startup.log:`n$log"
     }
-    $script:report.Add("$Label: stayed alive ${AliveSeconds}s, MainWindowLoaded recorded, exit $($process.ExitCode), CloseMainWindow=$closed.")
+    $script:report.Add("${Label}: stayed alive ${AliveSeconds}s, MainWindowLoaded recorded, exit $($process.ExitCode), CloseMainWindow=$closed.")
 }
 
 function Assert-PathExists([string]$Path, [string]$Why) {
