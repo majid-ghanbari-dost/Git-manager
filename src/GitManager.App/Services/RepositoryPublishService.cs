@@ -24,8 +24,19 @@ public sealed class RepositoryPublishService
         _operationLock = operationLock;
     }
 
-    public async Task<RepositoryPushResult> PushAsync(
+    public Task<RepositoryPushResult> PushAsync(
         ProjectRecord project,
+        CancellationToken cancellationToken = default) =>
+        PushToUrlAsync(project, null, cancellationToken);
+
+    /// <summary>
+    /// Pushes the current branch to an explicitly selected GitHub repository.
+    /// The target is validated and access is checked through the user's configured
+    /// Git Credential Manager before any write is attempted.
+    /// </summary>
+    public async Task<RepositoryPushResult> PushToUrlAsync(
+        ProjectRecord project,
+        string? targetUrl,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(project.RepositoryPath) ||
@@ -43,10 +54,21 @@ public sealed class RepositoryPublishService
         if (File.Exists(Path.Combine(gitDirectory, "index.lock")))
             throw new InvalidOperationException("قفل Git فعال است؛ پس از بسته‌شدن ابزارهای Git دوباره تلاش کنید.");
 
-        var remoteUrl = await _git.RunAsync(project.RepositoryPath, cancellationToken, "remote", "get-url", "origin");
-        var remote = GitHubRemote.Parse(remoteUrl);
-        if (!remote.CanonicalUrl.Equals(project.CanonicalRemoteUrl, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("نشانی origin با مخزن ثبت‌شده در کتابخانه یکسان نیست؛ برای جلوگیری از ارسال به مقصد اشتباه، Push متوقف شد.");
+        GitHubRemote remote;
+        string pushTarget;
+        if (string.IsNullOrWhiteSpace(targetUrl))
+        {
+            var remoteUrl = await _git.RunAsync(project.RepositoryPath, cancellationToken, "remote", "get-url", "origin");
+            remote = GitHubRemote.Parse(remoteUrl);
+            if (!remote.CanonicalUrl.Equals(project.CanonicalRemoteUrl, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("نشانی origin با مخزن ثبت‌شده در کتابخانه یکسان نیست؛ برای جلوگیری از ارسال به مقصد اشتباه، Push متوقف شد.");
+            pushTarget = "origin";
+        }
+        else
+        {
+            remote = GitHubRemote.Parse(targetUrl);
+            pushTarget = remote.CanonicalUrl;
+        }
 
         string credentialHelper;
         try
@@ -77,9 +99,14 @@ public sealed class RepositoryPublishService
         try
         {
             await _journal.SetStateAsync(operation.OperationId, "Running", cancellationToken: cancellationToken);
+            // For an explicit destination, verify read access first. An empty
+            // repository legitimately returns no refs; permission errors fail here.
+            if (pushTarget != "origin")
+                await _git.RunAsync(project.RepositoryPath, cancellationToken, "ls-remote", "--heads", pushTarget);
+
             // Explicit branch refspec; no --force / --force-with-lease is ever used.
             await _git.RunAsync(project.RepositoryPath, cancellationToken,
-                "push", "--set-upstream", "origin", $"HEAD:refs/heads/{branch}");
+                "push", "--set-upstream", pushTarget, $"HEAD:refs/heads/{branch}");
             await _journal.SetStateAsync(operation.OperationId, "Completed",
                 "شاخه با Push عادی و بدون Force به origin ارسال شد.", cancellationToken);
             return new RepositoryPushResult(branch, commit, hasUncommittedChanges);
