@@ -94,11 +94,14 @@
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="پروژه‌های کتابخانه" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
-                            <TextBox Text="{Binding TargetRepositoryUrl, UpdateSourceTrigger=PropertyChanged}" Width="245" Padding="7" Margin="14,0,6,0" FlowDirection="LeftToRight" ToolTip="لینک مخزن مقصد در GitHub؛ باید اجازه نوشتن داشته باشید" />
-                            <Button Content="ارسال به ریپوی مقصد" Command="{Binding PushCommand}" ToolTip="بررسی دسترسی مقصد با Git Credential Manager و ارسال شاخه فعلی؛ بدون Force Push" Padding="12,5"/>
                             <Button Content="پشتیبان‌گیری + SHA-256" Command="{Binding BackupCommand}" Margin="16,0,0,0" Padding="12,5"/>
                             <Button Content="انتقال پروژه به دسته انتخاب‌شده" Command="{Binding MoveProjectCommand}" Margin="8,0,0,0" Padding="12,5"/>
                             <Button Content="بازیابی پشتیبان" Command="{Binding RestoreCommand}" Margin="8,0,0,0" Padding="12,5"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="مخزن مقصد GitHub" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox Text="{Binding TargetRepositoryUrl, UpdateSourceTrigger=PropertyChanged}" Width="330" Padding="7" FlowDirection="LeftToRight" ToolTip="لینک مخزن مقصدی که اجازه نوشتن در آن دارید"/>
+                            <Button Content="ارسال به ریپوی مقصد" Command="{Binding PushCommand}" ToolTip="بررسی دسترسی با Git Credential Manager و ارسال شاخه فعلی؛ بدون Force Push" Margin="8,0,0,0" Padding="12,5"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="فیلتر وضعیت" VerticalAlignment="Center" Margin="0,0,8,0"/>
