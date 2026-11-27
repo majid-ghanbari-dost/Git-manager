@@ -92,6 +92,7 @@ public sealed class RepositoryPublishServiceTests
                 "status" => "",
                 "rev-parse" => "0123456789abcdef",
                 "push" => "",
+                "ls-remote" => "",
                 _ => throw new InvalidOperationException("Unexpected git command: " + string.Join(" ", arguments))
             };
             return Task.FromResult(result);
