@@ -2,74 +2,59 @@
 
 A Windows desktop application for organizing, cloning, backing up, restoring, and safely publishing GitHub repositories that the user is authorized to access.
 
-## Core product rule
+**Core rule: one central workspace, one isolated folder per project.** Each repository has its own working copy, backups, notes, and stable project identity. Project category and lifecycle are separate concepts.
 
-**One central workspace, one isolated folder per project.** Repositories must never be dumped together into a shared directory. Every GitHub repository gets its own stable project identity and its own working copy, backups, manifests, and local notes.
+## Current implementation
+
+Work is stacked on isolated branches and has not been merged into `main`. WP-2.3 added physical lifecycle moves. WP-2.4 on `work/wp-2-4-windows-productization` adds a self-contained Windows x64 installer (`GitManager-Setup-x64.exe`), portable ZIP, SHA-256 checksums, and a Windows-runner install/uninstall smoke. WP-2.5.1 on `work/wp-2-5-1-journal-clone-bootstrap` bootstraps the operation journal so first-run Clone is not blocked by a missing SQLite table, and keeps the library open if recovery fails. Uninstall does not delete the user workspace or LocalAppData catalog/journal. This is not a signed production release and is not a Product Owner clean-machine test. Publishing and submodule/LFS fidelity remain incomplete.
+
+See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work and limitations.
 
 ## Planned workspace layout
 
-The user chooses one root folder, for example `D:\GitManager`. Git Manager manages this structure:
-
 ```text
-D:\GitManager\
-├── 00_Manager\
-│   ├── catalog\              # Local project registry (SQLite)
-│   ├── settings\             # User preferences; no access tokens
-│   ├── logs\                 # Operation logs
-│   └── temp\                 # Temporary staging; cleaned safely
-├── 01_Active\
-│   └── <Category>\
-│       └── <GitHub-Owner>\
-│           └── <Repository>\
-│               ├── repository\   # Actual Git clone, including .git history
-│               ├── backups\      # Timestamped Git bundles and manifests
-│               └── notes\        # Local project notes and metadata
-├── 02_On-Hold\
-│   └── <Category>\<Owner>\<Repository>\...
-├── 03_Archived\
-│   └── <Category>\<Owner>\<Repository>\...
-├── 04_Quarantine\               # Repositories needing inspection; never auto-run
-└── 05_Exports\                  # User-requested portable exports
+<WorkspaceRoot>/
+├── 00_Manager/
+│   ├── catalog/              # SQLite project registry
+│   ├── settings/             # Non-secret preferences
+│   ├── logs/
+│   └── temp/                 # Transactional staging
+├── 01_Active/<Category>/<Owner>/<Repository>/
+│   ├── repository/            # Actual Git clone, including .git history
+│   ├── backups/
+│   └── notes/
+├── 02_On-Hold/
+├── 03_Archived/
+├── 04_Quarantine/
+└── 05_Exports/
 ```
-
-The exact root is configurable. The application creates the structure; users do not need to create it manually.
-
-## Classification rules
-
-- On import, the user can choose a category (for example: Kandoo, Business Tools, Experiments, Personal, Client Work).
-- If no category is chosen, the project enters an explicit **Unclassified** category. The app must not guess silently.
-- Lifecycle is separate from category: Active, On-Hold, and Archived are top-level states.
-- Repository identity is based on normalized GitHub host + owner + repository name, not just the repository name.
-- Same-named repositories from different owners must never collide.
-- Re-importing an existing project must detect it and offer update, open, or cancel; it must not overwrite the working copy.
-- Each project has its own repository directory. No cross-project shared working tree.
-
-## Main workflows
-
-1. **Import / Clone:** validate access, show destination and category, clone full Git history, register the project.
-2. **Backup:** create a timestamped Git bundle plus manifest and SHA-256 checksums; preserve refs and history.
-3. **Restore:** verify the manifest and checksums before restoring into a new or explicitly selected destination.
-4. **Publish:** show changed files and diff, block likely secrets, create a commit, and push only after explicit confirmation.
-5. **Organize:** change category or lifecycle without changing repository identity.
-6. **Inventory:** searchable project catalog with owner, repository, category, lifecycle, local path, branch, last backup, and sync status.
 
 ## Safety requirements
 
+- Never silently overwrite an existing project.
 - Never force-push by default.
-- Never overwrite an existing project folder silently.
-- Never delete a project or backup as a side effect of moving or reclassifying it.
-- Do not store GitHub credentials in the application database or settings files. Use Git Credential Manager / Git's configured credential helper or an OS credential store.
-- Never execute scripts, hooks, or project code automatically after cloning.
-- Treat repository contents as untrusted until inspected.
-- Detect and warn about secrets before staging or pushing. Secret detection is a safety net, not a guarantee.
-- Preserve full Git history by default. Shallow clone must be an explicit advanced choice.
-- Support private repositories only when the authenticated user has sufficient GitHub permission.
+- Never store GitHub credentials in SQLite, settings, logs, or manifests.
+- Never execute scripts or hooks automatically after cloning.
+- Preserve full Git history by default.
+- Backups include a Git bundle, working-tree snapshot, deletion-state manifest, and SHA-256 verification. Restore verifies the backup and writes only to a new destination.
+- Current backup coverage excludes submodule contents, Git LFS payloads, symlink restoration, and complete filesystem metadata.
+- A Git bundle alone does not preserve uncommitted changes, untracked files, submodule contents, or Git LFS objects; the backup workflow must report and handle these separately.
 
-## Delivery approach
+## Technology
 
-The application is planned as a native-feeling Windows desktop app, with a signed/packaged installer when release infrastructure is ready. The repository will contain source, tests, documentation, CI, build scripts, and release metadata. Generated binaries and user project backups do not belong in this source repository.
+- .NET 10 LTS / WPF / MVVM
+- SQLite for the local project catalog
+- Git for Windows invoked as a child process with argument-safe APIs
+- Git Credential Manager or the user's configured Git credential helper
+
+## Development
+
+Prerequisites: Windows 10/11 x64, .NET 10 SDK for development, and Git for Windows available on `PATH`. CI publishes a self-contained portable ZIP and `GitManager-Setup-x64.exe`. Git for Windows is not bundled inside the installer.
+
+Open `src/GitManager.App/GitManager.App.csproj` in Visual Studio 2026 or build with the .NET 10 SDK on Windows.
 
 See:
 - [Workspace architecture](docs/WORKSPACE-ARCHITECTURE.md)
 - [Safety model](docs/SAFETY-MODEL.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Implementation status](docs/IMPLEMENTATION-STATUS.md)

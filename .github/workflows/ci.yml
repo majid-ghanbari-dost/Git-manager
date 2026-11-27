@@ -1,0 +1,185 @@
+name: Windows CI
+on:
+  push:
+    branches: [main, 'work/**']
+  pull_request:
+    branches: [main, 'work/**']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Record runner environment
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/install-evidence | Out-Null
+          $osCaption = ""
+          $osVersion = ""
+          try {
+            $os = Get-CimInstance -ClassName Win32_OperatingSystem
+            $osCaption = $os.Caption
+            $osVersion = "$($os.Version) $($os.OSArchitecture)"
+          } catch { }
+          @(
+            "utc=$(Get-Date -Format o)"
+            "run_id=$env:GITHUB_RUN_ID"
+            "run_attempt=$env:GITHUB_RUN_ATTEMPT"
+            "sha=$env:GITHUB_SHA"
+            "ref=$env:GITHUB_REF"
+            "event=$env:GITHUB_EVENT_NAME"
+            "computer=$env:COMPUTERNAME"
+            "os=$([Environment]::OSVersion)"
+            "osCaption=$osCaption"
+            "osCim=$osVersion"
+            "os64=$([Environment]::Is64BitOperatingSystem)"
+            "interactive=$([Environment]::UserInteractive)"
+            "session=$env:SESSIONNAME"
+            "clr=$([Environment]::Version)"
+          ) | Set-Content artifacts/install-evidence/runner-env.txt -Encoding utf8
+          Set-Content artifacts/install-evidence/windows-version.txt -Value @($osCaption, $osVersion, [Environment]::OSVersion.ToString()) -Encoding utf8
+          try { & dotnet --info 2>&1 | Out-File artifacts/install-evidence/dotnet-info.txt -Encoding utf8 } catch { "$_" | Out-File artifacts/install-evidence/dotnet-info.txt -Encoding utf8 }
+      - name: Restore
+        run: dotnet restore src/GitManager.App/GitManager.App.csproj
+      - name: Build
+        run: dotnet build src/GitManager.App/GitManager.App.csproj --configuration Release --no-restore
+      - name: Run unit tests
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/test-results | Out-Null
+          dotnet test tests/GitManager.Tests/GitManager.Tests.csproj --configuration Release --logger "trx;LogFileName=wp24.trx" --results-directory artifacts/test-results
+          $code = $LASTEXITCODE
+          $trx = Get-ChildItem -LiteralPath artifacts/test-results -Filter *.trx -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($trx) {
+            [xml]$xml = Get-Content -LiteralPath $trx.FullName
+            $nsmgr = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $nsmgr.AddNamespace("t", "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")
+            foreach ($node in $xml.SelectNodes("//t:UnitTestResult[@outcome='Failed']", $nsmgr)) {
+              $name = $node.GetAttribute("testName")
+              $msg = $node.SelectSingleNode("t:Output/t:ErrorInfo/t:Message", $nsmgr)?.InnerText
+              $stack = $node.SelectSingleNode("t:Output/t:ErrorInfo/t:StackTrace", $nsmgr)?.InnerText
+              Write-Host "::error::$name :: $msg"
+              if ($stack) { Write-Host $stack }
+            }
+          }
+          if ($code -ne 0) { exit $code }
+      - name: Publish self-contained win-x64
+        run: >
+          dotnet publish src/GitManager.App/GitManager.App.csproj
+          --configuration Release --runtime win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:IncludeAllContentForSelfExtract=true
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          --output artifacts/GitManager-win-x64
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed" }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "ISCC.exe not found at $iscc" }
+      - name: Build installer, portable ZIP, hashes, and source handoff
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $compileLog = Join-Path $PWD "artifacts/inno-compile.log"
+          $publishDir = Join-Path $PWD "artifacts/GitManager-win-x64"
+          $setup = Join-Path $PWD "artifacts/GitManager-Setup-x64.exe"
+          $portable = Join-Path $PWD "artifacts/GitManager-win-x64-portable.zip"
+          $sourceArchive = Join-Path $PWD "artifacts/GitManager-source.zip"
+          $manifest = Join-Path $PWD "artifacts/SOURCE-MANIFEST-SHA256.txt"
+          $handoff = Join-Path $PWD "artifacts/GitManager-WP-2.4-Handoff.zip"
+
+          if (-not (Test-Path -LiteralPath (Join-Path $publishDir "GitManager.exe"))) {
+            throw "Published GitManager.exe is missing."
+          }
+
+          $iss = Join-Path $PWD "installer\GitManager.iss"
+          $compileOutput = & $iscc "/DMyAppVersion=2.5.6" "/DPublishDir=$publishDir" $iss 2>&1
+          $isccExit = $LASTEXITCODE
+          $compileOutput | Set-Content -LiteralPath $compileLog -Encoding utf8
+          $compileOutput | Write-Host
+          if ($isccExit -ne 0) { throw "ISCC failed with exit $isccExit" }
+          if (-not (Test-Path -LiteralPath $setup)) { throw "GitManager-Setup-x64.exe was not produced." }
+
+          if (Test-Path -LiteralPath $portable) { Remove-Item -LiteralPath $portable -Force }
+          Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $portable -CompressionLevel Optimal
+
+          git archive --format=zip --output="$sourceArchive" HEAD
+          if ($LASTEXITCODE -ne 0) { throw "git archive failed" }
+
+          $manifestEntries = @()
+          foreach ($relativePath in (git ls-files)) {
+            if (-not (Test-Path -LiteralPath $relativePath -PathType Leaf)) {
+              throw "Tracked source file is missing: $relativePath"
+            }
+            $fileHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $relativePath).Hash.ToLowerInvariant()
+            $manifestEntries += "$fileHash  $relativePath"
+          }
+          $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceArchive).Hash.ToLowerInvariant()
+          $manifestEntries += "$sourceHash  GitManager-source.zip"
+          Set-Content -LiteralPath $manifest -Value $manifestEntries -Encoding utf8
+          Compress-Archive -Path @($sourceArchive, $manifest) -DestinationPath $handoff -CompressionLevel Optimal -Force
+
+          foreach ($file in @($setup, $portable, $handoff)) {
+            $name = Split-Path $file -Leaf
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant()
+            Set-Content -LiteralPath "$file.sha256" -Value "$hash  $name" -Encoding ascii
+          }
+      - name: Installer install/upgrade/uninstall smoke
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/install-evidence | Out-Null
+          Set-Content -LiteralPath artifacts/install-evidence/smoke-begin.txt -Value "smoke started $(Get-Date -Format o)" -Encoding utf8
+          & "$PWD\scripts\ci-install-smoke.ps1" `
+            -SetupExe "$PWD\artifacts\GitManager-Setup-x64.exe" `
+            -ReportPath "$PWD\artifacts\install-evidence\install-uninstall-report.md" `
+            -LogDirectory "$PWD\artifacts\install-evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: git-manager-test-results-${{ github.run_id }}-${{ job.status }}
+          path: artifacts/test-results/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: git-manager-install-evidence-${{ github.run_id }}-${{ job.status }}
+          path: |
+            artifacts/install-evidence/
+            artifacts/inno-compile.log
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: git-manager-installer-x64-${{ github.run_id }}-${{ job.status }}
+          path: |
+            artifacts/GitManager-Setup-x64.exe
+            artifacts/GitManager-Setup-x64.exe.sha256
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: git-manager-portable-x64-${{ github.run_id }}-${{ job.status }}
+          path: |
+            artifacts/GitManager-win-x64-portable.zip
+            artifacts/GitManager-win-x64-portable.zip.sha256
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: git-manager-wp-2-4-source-handoff-${{ github.run_id }}-${{ job.status }}
+          path: |
+            artifacts/GitManager-WP-2.4-Handoff.zip
+            artifacts/GitManager-WP-2.4-Handoff.zip.sha256
+          if-no-files-found: error

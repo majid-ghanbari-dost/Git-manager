@@ -4,27 +4,34 @@
 - [x] Define central workspace and per-project isolation
 - [x] Separate project category from lifecycle
 - [x] Define import, backup, restore, and publish safety rules
-- [ ] Confirm supported Windows baseline and UI framework
+- [x] Select .NET 10 LTS, WPF/MVVM, SQLite, and Git CLI
 
 ## Phase 1 — Foundation
-- [ ] Application shell and Persian RTL interface
-- [ ] First-run workspace setup and validation
-- [ ] SQLite catalog and migrations
-- [ ] Category and lifecycle management
-- [ ] Project inventory and search
+- [x] Application shell and Persian RTL interface
+- [x] First-run workspace setup and validation
+- [x] SQLite catalog and initial category seed
+- [x] Initial project inventory and selection
+- [x] Category CRUD, project moves, populated-category rename, and ordering (WP-2.2)
+- [x] Lifecycle management: Active / On-Hold / Archived physical moves, history, recovery (WP-2.3; not merged)
+- [x] Windows installer, uninstaller, portable ZIP, and SHA-256 (WP-2.4; Windows runner smoke, not merged)
+- [x] Recovery journal and interrupted-operation recovery (WP-2.1; Windows CI passed on the work branch)
+- [x] CI build and unit tests passing on WP-2.1, WP-2.2, WP-2.3, and WP-2.4 work branches (not on `main`)
 
 ## Phase 2 — Repository acquisition
-- [ ] GitHub URL validation and canonical identity
-- [ ] Authentication through Git Credential Manager
-- [ ] Permission and repository metadata check
-- [ ] Transactional clone through staging
-- [ ] Duplicate detection and safe re-import
+- [x] GitHub URL validation and canonical identity
+- [x] Authentication through configured Git credential helper
+- [x] Staged full-history clone and remote verification
+- [x] Duplicate detection and no-overwrite destination handling
+- [x] Journal bootstrap so first-run Clone is not blocked by a missing `project_operations` table (WP-2.5.1; not merged)
+- [ ] Permission and repository metadata preview
+- [ ] Explicit retry/resume workflow for interrupted clones
 
 ## Phase 3 — Preservation
-- [ ] Full-history Git bundle backup
-- [ ] Working-tree snapshot for uncommitted/untracked files
-- [ ] Manifest and SHA-256 generation/verification
-- [ ] Backup retention and restore to a new location
+- [x] Full-history Git bundle backup
+- [x] Working-tree snapshot including tracked, untracked, and ignored files
+- [x] SHA-256 manifest and backup integrity verification
+- [x] Restore into a new, empty destination with path-traversal checks
+- [x] Recovery journal and interrupted-backup recovery (WP-2.1)
 - [ ] Explicit submodule and Git LFS coverage reporting
 
 ## Phase 4 — Safe publishing
@@ -35,9 +42,10 @@
 - [ ] No force push by default
 
 ## Phase 5 — Quality and release
-- [ ] Unit and integration tests
-- [ ] Windows clean-machine smoke test
-- [ ] CI build and test workflow
-- [ ] Installer and uninstaller
-- [ ] Release notes, checksums, and signed artifacts where feasible
-- [ ] Full source archive, manifest, and SHA-256 handoff
+- [x] Windows CI build and portable self-contained publish workflow
+- [ ] Expanded integration and UI tests
+- [ ] Windows clean-machine smoke test (Product Owner)
+- [x] Installer and uninstaller (WP-2.4 work-branch CI smoke; not signed)
+- [x] SHA-256 checksums for installer, portable ZIP, and source handoff
+- [ ] Release notes and signed artifacts
+- [x] Source archive, manifest, and SHA-256 handoff on work-branch CI (not a `main` release)
