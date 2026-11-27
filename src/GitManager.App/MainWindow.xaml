@@ -24,9 +24,9 @@
                     <ComboBoxItem Content="روشن"/>
                     <ComboBoxItem Content="تاریک"/>
                 </ComboBox>
-                <Button Content="—" Width="42" Margin="0" Padding="0" Background="Transparent" Foreground="#000000" BorderThickness="0" Click="Minimize_Click"/>
-                <Button Content="□" Width="42" Margin="0" Padding="0" Background="Transparent" Foreground="#000000" BorderThickness="0" Click="Maximize_Click"/>
-                <Button Content="×" Width="46" Margin="0" Padding="0" Background="#F5DDE1" Foreground="#000000" BorderThickness="0" Click="Close_Click"/>
+                <Button Content="—" Width="42" Margin="0" Padding="0" Background="Transparent" Foreground="{DynamicResource PrimaryTextBrush}" BorderThickness="0" Click="Minimize_Click"/>
+                <Button Content="□" Width="42" Margin="0" Padding="0" Background="Transparent" Foreground="{DynamicResource PrimaryTextBrush}" BorderThickness="0" Click="Maximize_Click"/>
+                <Button Content="×" Width="46" Margin="0" Padding="0" Background="#F5DDE1" Foreground="{DynamicResource PrimaryTextBrush}" BorderThickness="0" Click="Close_Click"/>
             </StackPanel>
         </Grid>
         <DockPanel Grid.Row="1" Margin="22,18,22,18">
@@ -46,7 +46,7 @@
                     <TextBlock Text="محل کتابخانه" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12"/>
                     <TextBlock Text="{Binding WorkspacePath}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding ProjectCount, StringFormat={}{0} پروژه}" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#000000"/>
+                <TextBlock Grid.Column="1" Text="{Binding ProjectCount, StringFormat={}{0} پروژه}" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryTextBrush}"/>
             </Grid>
         </Border>
         <Grid Grid.Row="3" Margin="22,0,22,0">
@@ -64,18 +64,18 @@
                     <TextBox Text="{Binding RepositoryUrl, UpdateSourceTrigger=PropertyChanged}" Padding="9" Margin="0,5,0,12" FlowDirection="LeftToRight"/>
                     <TextBlock Text="دسته‌بندی مقصد" Foreground="{DynamicResource SecondaryTextBrush}"/>
                     <ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" Padding="7" Margin="0,5,0,12"/>
-                    <Button Content="Clone و افزودن به کتابخانه" Command="{Binding CloneCommand}" ToolTip="{Binding CloneDisabledReason}" Background="#DCE8F7" Foreground="#000000" BorderThickness="0" Padding="10,9"/>
+                    <Button Content="Clone و افزودن به کتابخانه" Command="{Binding CloneCommand}" ToolTip="{Binding CloneDisabledReason}" Background="{DynamicResource SurfaceBrush}" Foreground="{DynamicResource PrimaryTextBrush}" BorderThickness="0" Padding="10,9"/>
                     <TextBlock Text="مسیر ذخیره‌سازی: کتابخانه ← 01_Active ← دسته‌بندی ← مالک ← نام مخزن" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,7,2,0"/>
                     <TextBlock Text="برای مخزن خصوصی، احراز هویت Git Credential Manager ویندوز استفاده می‌شود؛ رمز یا توکن در برنامه ذخیره نمی‌شود." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="10" TextWrapping="Wrap" Margin="2,5,2,0"/>
-                    <TextBlock Text="{Binding CloneDisabledReason}" Foreground="#000000" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    <TextBlock Text="{Binding CloneDisabledReason}" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     <Separator Margin="0,18,0,12"/>
                     <TextBlock Text="مدیریت دسته‌بندی‌ها" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
-                    <TextBlock Text="دسته‌بندی جدید" Foreground="#000000"/>
+                    <TextBlock Text="دسته‌بندی جدید" Foreground="{DynamicResource PrimaryTextBrush}"/>
                     <DockPanel Margin="0,4,0,10">
                         <Button DockPanel.Dock="Left" Content="ایجاد" Command="{Binding CreateCategoryCommand}" Padding="12,5"/>
                         <TextBox Text="{Binding NewCategoryName, UpdateSourceTrigger=PropertyChanged}" Padding="7" FlowDirection="RightToLeft"/>
                     </DockPanel>
-                    <TextBlock Text="تغییر نام دسته‌بندی انتخاب‌شده" Foreground="#000000"/>
+                    <TextBlock Text="تغییر نام دسته‌بندی انتخاب‌شده" Foreground="{DynamicResource PrimaryTextBrush}"/>
                     <DockPanel Margin="0,4,0,8">
                         <Button DockPanel.Dock="Left" Content="تغییر نام" Command="{Binding RenameCategoryCommand}" Padding="10,5"/>
                         <TextBox Text="{Binding RenameCategoryName, UpdateSourceTrigger=PropertyChanged}" Padding="7"/>
@@ -85,7 +85,7 @@
                         <Button Content="بالا بردن دسته" Command="{Binding MoveCategoryUpCommand}" Padding="10,5" Margin="0,0,6,0"/>
                         <Button Content="پایین بردن دسته" Command="{Binding MoveCategoryDownCommand}" Padding="10,5"/>
                     </StackPanel>
-                    <TextBlock Text="تغییر نام دسته دارای پروژه، همه پوشه‌های پروژه را با ثبت Journal و امکان بازیابی منتقل می‌کند. حذف دسته دارای پروژه مجاز نیست؛ ابتدا پروژه‌ها را جداگانه منتقل کنید. Unclassified همیشه در ابتدای فهرست می‌ماند." TextWrapping="Wrap" Foreground="#000000" FontSize="11" Margin="4,0,4,0"/>
+                    <TextBlock Text="تغییر نام دسته دارای پروژه، همه پوشه‌های پروژه را با ثبت Journal و امکان بازیابی منتقل می‌کند. حذف دسته دارای پروژه مجاز نیست؛ ابتدا پروژه‌ها را جداگانه منتقل کنید. Unclassified همیشه در ابتدای فهرست می‌ماند." TextWrapping="Wrap" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="11" Margin="4,0,4,0"/>
                     <TextBlock Text="Clone فقط فایل‌ها و تاریخچه مخزن را دریافت می‌کند؛ هیچ اسکریپت یا کد پروژه‌ای به‌صورت خودکار اجرا نمی‌شود." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="4,10,4,0"/>
                 </StackPanel>
             </Border>
@@ -138,7 +138,7 @@
             </Border>
         </Grid>
         <Border Grid.Row="4" Background="Transparent" Padding="26,12,26,12">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="#000000" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource PrimaryTextBrush}" TextWrapping="Wrap"/>
         </Border>
     </Grid>
 </Window>
