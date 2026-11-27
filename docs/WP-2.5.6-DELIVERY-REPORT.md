@@ -1,86 +1,42 @@
-# WP-2.5.6 Delivery Report — Runtime stability
+# WP-2.5.6 Delivery Report — Git Manager 2.5.6
 
-Branch: `work/wp-2-5-6-runtime-stability`  
-Base: `work/wp-2-5-5-git-workflow` @ `26b61012276ea56333862c867e780780f993c889`  
-Head: `45a28147474d1adef1127113d78bff0a2921db2c`  
-Product version: **2.5.6**  
-Draft PR: https://github.com/majid-ghanbari-dost/Git-manager/pull/12  
+**Status: merged to `main` and CI delivery smoke passed.**
 
-Policy: Draft only. No merge to `main`. PRs #1–#11 untouched.
+- Pull request: [#12](https://github.com/majid-ghanbari-dost/Git-manager/pull/12) — merged
+- Merge commit: `6232d24878296c2e0f22800f1e5205f0281cb8de`
+- Validated source commit: `f40978f2b38727d1e04246b7b67b69940a8b743f`
+- Windows CI run: [45945175034](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45945175034)
 
-**Status: NOT READY for Product Owner install.**
+## Validation
 
-A green `--ci-smoke` is **not** proof that the WPF shell runs.
-Process-alive in GitHub `windows-latest` Session 0 is **not** visual proof of layout, RTL, or theme.
+All steps completed successfully on GitHub Actions Windows runner:
 
-## Diagnosis of CI `45647609619`
+- Restore and Release build
+- Unit tests
+- Self-contained win-x64 publish
+- Inno Setup installer compilation
+- Installer install, application launch, repair, upgrade, uninstall smoke
+- Separate upload of installer, portable package, source handoff, test results, and install evidence
 
-This is the run named in the mission. It was a **pull_request** workflow on SHA `5e49a47f653d64c320b82edb4e64cdba8d7a0027`.
+The installed-app smoke is a Windows hosted-runner test. It is not a Product Owner clean-machine installation or interactive visual inspection. The installer is not code-signed.
 
-From check-run API (captured while GitHub still answered):
+## Download deliverables
 
-| Field | Value |
-|---|---|
-| Conclusion | `failure` |
-| Job `build` started | 2026-11-25T15:39:17Z |
-| Job `build` completed | 2026-11-25T15:39:19Z |
-| `steps[]` length | **0** |
-| Artifacts | **none** |
-| Annotation | *The job was not started because recent account payments have failed or your spending limit needs to be increased.* |
+Open the [successful Actions run](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45945175034) and download these separate artifacts:
 
-**None of these stages ran:** Build, Publish, Installer creation, Installation, First launch, MainWindowLoaded, 30-second runtime, Graceful shutdown, Restart.
+| Artifact | GitHub artifact ID | Size |
+|---|---:|---:|
+| Installer x64 | `15175045072` | 45.1 MB |
+| Portable x64 ZIP | `15174388172` | 61.9 MB |
+| Install / uninstall evidence | `15174970243` | 14 KB |
+| Source handoff ZIP + manifest | `15174596899` | 138 KB |
+| Unit test results | `15174019395` | 28 KB |
 
-This failure is **not** an application crash. It is GitHub Actions billing on a private repository. No job log exists because the hosted job never started. Artifact upload (`if: always()`) cannot run if the job is refused.
+Artifacts are retained by GitHub until **2027-02-25**. The installer, portable, and source-handoff artifacts each include their generated SHA-256 sidecar file. The artifact archive digests are recorded by GitHub on the Actions run.
 
-The sibling push run `45647594044` on the same SHA failed the same way.
+## Remaining release limitations
 
-Re-fetch of this run from the current environment (later) returned GitHub auth/TLS errors (`GH_TOKEN` rejected; `gnutls_handshake` / API EOF). That does not change the earlier billing annotation.
-
-## The only installed-smoke execution after STA passed
-
-| SHA | Run | What actually ran |
-|---|---|---|
-| `08e4f8b` | push [45633358477](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45633358477) | Restore/Build/Unit tests **success** (STA `MainWindow.Show` + Loaded). Publish **success**. Inno **success**. **Installer smoke failed.** Evidence artifact `git-manager-wp-2-4-install-evidence` id `15032282309` (~868 B). Exception text **not retrieved** (Azure blob EOF from this environment). |
-| `08e4f8b` | PR 45633371073 | Same smoke failure. |
-| `746d97d` … `5e49a47` | 45634457028, 45634473638, 45634712000, 45646476454, 45646490295, **45647609619**, 45647594044 | Job **not started** (billing). No steps. No artifacts. |
-
-Root cause of the `08e4f8b` installed-process death is **not proven**. Pack URI, window icon, and CenterScreen remain hypotheses. They must not be declared the cause until an installed smoke log shows them.
-
-## Fixes present on the branch (unproven against installed exe)
-
-- Frozen brush replacement (`SetBrush`).
-- Startup log under `%LOCALAPPDATA%\GitManager\logs\startup.log`.
-- XAML pack URI Icon removed; ICO from embedded stream / file next to exe.
-- `WindowStartupPlacement` fallback when screen metrics are unusable.
-- Installed smoke launches the **Inno-installed** `GitManager.exe` with **no** `--ci-smoke`, 30s, `MainWindowLoaded`, close, restart.
-- Smoke writes `smoke-env.txt`, `windows-version.txt`, `dotnet-info.txt`, `install-layout.txt`, process snapshots, `smoke-exception.txt`, and copies `startup.log` on failure.
-- Evidence / installer / portable artifact names include `${{ github.run_id }}-${{ job.status }}` and upload `if: always()`.
-- Runner environment is recorded **before** Restore so a later smoke crash still has `artifacts/install-evidence/runner-env.txt` if the job actually started.
-
-STA tests are the test host, not the installed single-file exe. The original passing Show test used Manual placement; a later test calls `WindowStartupPlacement.Apply` then Show.
-
-## Version and packages
-
-- ISS / CI `/DMyAppVersion=2.5.6`
-- Installer and portable are **separate** artifact names (not one combined zip).
-- Uninstall has no `[UninstallDelete]` / `[InstallDelete]`.
-- SHA-256 of installer/portable for a **green smoke** run: **not produced**.
-- Independent installer/portable links: **none for a passing run**.
-
-## Not tested / not claimed
-
-- Product Owner computer.
-- Interactive visual inspection.
-- Signed installer.
-- Proven root cause of `08e4f8b` smoke failure.
-- Any CI job after the billing lock, including `45647609619`.
-
-## What must happen to finish
-
-1. Reconnect GitHub authentication if `gh` reports an invalid token.
-2. Restore GitHub Actions billing / spending limit for this private repository.
-3. Re-run Windows CI on `work/wp-2-5-6-runtime-stability`.
-4. A passing run must show: install from that run's Setup exe, 30s alive, `MainWindowLoaded`, no critical startup exception, clean close, restart, then separate installer and portable artifacts with SHA-256.
-5. Do not merge until that happens.
-
-No merge was performed.
+- Product Owner must still perform the first installation and interactive UI check on the target PC.
+- Installer is unsigned.
+- Backup support for submodule contents and Git LFS payloads remains incomplete.
+- This report does not claim those limitations are resolved.
