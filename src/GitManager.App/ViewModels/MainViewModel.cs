@@ -30,6 +30,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string _renameCategoryName = "";
     private string _workspacePath = "";
     private string _repositoryUrl = "";
+    private string _targetRepositoryUrl = "";
     private string _selectedCategory = "Unclassified";
     private string _statusMessage = "برای شروع، محل کتابخانه را انتخاب کنید.";
     private string _searchText = "";
@@ -54,6 +55,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
     public string CloneDisabledReason =>
         CloneCommandGate.DisabledReason(_catalog is not null, _journalUsable, RepositoryUrl);
+    public string TargetRepositoryUrl
+    {
+        get => _targetRepositoryUrl;
+        set { _targetRepositoryUrl = value; OnPropertyChanged(); }
+    }
     public string SelectedCategory
     {
         get => _selectedCategory;
@@ -449,22 +455,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
         var project = SelectedProject;
         if (project is null) return;
 
+        var target = TargetRepositoryUrl.Trim();
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            StatusMessage = "لینک مخزن مقصد را وارد کنید؛ مقصد ارسال نباید حدسی انتخاب شود.";
+            return;
+        }
+
+        GitHubRemote destination;
+        try { destination = GitHubRemote.Parse(target); }
+        catch (Exception ex) { StatusMessage = ex.Message; return; }
+
         var confirmation = MessageBox.Show(
-            $"شاخه فعلی پروژه {project.Owner}/{project.Repository} به origin در GitHub ارسال می‌شود.\n\n" +
-            "فقط Commitها ارسال می‌شوند؛ تغییرات Commit‌نشده روی رایانه باقی می‌مانند. " +
-            "این عملیات Force Push نیست و تاریخچه remote را بازنویسی نمی‌کند.\n\nادامه می‌دهید؟",
+            $"شاخه فعلی پروژه {project.Owner}/{project.Repository} به مخزن مقصد زیر ارسال می‌شود:\n\n{destination.Owner}/{destination.Repository}\n{destination.CanonicalUrl}\n\n" +
+            "ابتدا دسترسی مقصد با Git Credential Manager بررسی می‌شود. فقط Commitها ارسال می‌شوند؛ تغییرات Commit‌نشده روی رایانه باقی می‌مانند. " +
+            "این عملیات Force Push نیست و تاریخچه remote را بازنویسی نمی‌کند. اگر شاخه مقصد تاریخچه ناسازگار داشته باشد، Git ارسال را رد می‌کند.\n\nادامه می‌دهید؟",
             "تأیید ارسال به GitHub", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirmation != MessageBoxResult.Yes) return;
 
         try
         {
-            StatusMessage = $"در حال ارسال شاخه {project.CurrentBranch} به GitHub...";
-            var result = await _publisher.PushAsync(project);
+            StatusMessage = $"در حال بررسی مجوز و ارسال شاخه {project.CurrentBranch} به {destination.Owner}/{destination.Repository}...";
+            var result = await _publisher.PushToUrlAsync(project, destination.CanonicalUrl);
             if (_catalog is not null)
                 await _catalog.UpdateGitSnapshotAsync(project.ProjectId, result.Branch, result.Commit);
             project.CurrentBranch = result.Branch;
             project.CurrentCommit = result.Commit;
-            StatusMessage = $"Push شاخه {result.Branch} با موفقیت انجام شد. Commit: {result.Commit[..Math.Min(8, result.Commit.Length)]}" +
+            StatusMessage = $"ارسال به {destination.Owner}/{destination.Repository} موفق بود. شاخه {result.Branch}، Commit: {result.Commit[..Math.Min(8, result.Commit.Length)]}" +
                 (result.HasUncommittedChanges
                     ? " — توجه: تغییرات Commit‌نشده فقط روی همین رایانه باقی ماندند."
                     : "");
