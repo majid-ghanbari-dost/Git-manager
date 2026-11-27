@@ -129,18 +129,16 @@ public partial class MainWindow : Window
 
     private void ApplyTheme(string mode)
     {
-        var registryValue = Microsoft.Win32.Registry.GetValue(
-            @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-            "AppsUseLightTheme", 1);
-        var systemDark = registryValue is int value && value == 0;
-        var dark = mode == "Dark" || (mode == "System" && systemDark);
-        SetBrush("AppBackgroundBrush", dark ? "#111827" : "#F4F6F9");
-        SetBrush("SurfaceBrush", dark ? "#1F2937" : "#FFFFFF");
-        SetBrush("PrimaryTextBrush", dark ? "#F3F4F6" : "#203247");
-        SetBrush("SecondaryTextBrush", dark ? "#AAB6C5" : "#66788A");
-        SetBrush("InputBackgroundBrush", dark ? "#273449" : "#FFFFFF");
-        SetBrush("InputForegroundBrush", dark ? "#F3F4F6" : "#203247");
-        SetBrush("GridLineBrush", dark ? "#374151" : "#E3E8EF");
+        // Keep a high-contrast light palette across the entire app.
+        // In particular, ComboBox popup items must never inherit white text
+        // from the Windows dark application theme while their popup is white.
+        SetBrush("AppBackgroundBrush", "#F4F6F9");
+        SetBrush("SurfaceBrush", "#FFFFFF");
+        SetBrush("PrimaryTextBrush", "#000000");
+        SetBrush("SecondaryTextBrush", "#000000");
+        SetBrush("InputBackgroundBrush", "#FFFFFF");
+        SetBrush("InputForegroundBrush", "#000000");
+        SetBrush("GridLineBrush", "#E3E8EF");
     }
 
     internal static void SetBrush(string key, string color)
