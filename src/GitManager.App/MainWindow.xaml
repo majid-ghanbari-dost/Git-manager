@@ -70,12 +70,12 @@
                     <TextBlock Text="{Binding CloneDisabledReason}" Foreground="#9A5B20" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     <Separator Margin="0,18,0,12"/>
                     <TextBlock Text="مدیریت دسته‌بندی‌ها" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
-                    <TextBlock Text="دسته‌بندی جدید" Foreground="#526273"/>
+                    <TextBlock Text="دسته‌بندی جدید" Foreground="#000000"/>
                     <DockPanel Margin="0,4,0,10">
                         <Button DockPanel.Dock="Left" Content="ایجاد" Command="{Binding CreateCategoryCommand}" Padding="12,5"/>
                         <TextBox Text="{Binding NewCategoryName, UpdateSourceTrigger=PropertyChanged}" Padding="7" FlowDirection="RightToLeft"/>
                     </DockPanel>
-                    <TextBlock Text="تغییر نام دسته‌بندی انتخاب‌شده" Foreground="#526273"/>
+                    <TextBlock Text="تغییر نام دسته‌بندی انتخاب‌شده" Foreground="#000000"/>
                     <DockPanel Margin="0,4,0,8">
                         <Button DockPanel.Dock="Left" Content="تغییر نام" Command="{Binding RenameCategoryCommand}" Padding="10,5"/>
                         <TextBox Text="{Binding RenameCategoryName, UpdateSourceTrigger=PropertyChanged}" Padding="7"/>
@@ -134,7 +134,7 @@
             </Border>
         </Grid>
         <Border Grid.Row="4" Background="Transparent" Padding="26,12,26,12">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="#526273" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#000000" TextWrapping="Wrap"/>
         </Border>
     </Grid>
 </Window>
