@@ -11,10 +11,10 @@
     <SolidColorBrush x:Key="AccentBrush" Color="#4F8CFF" />
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F4F6F9" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="PrimaryTextBrush" Color="#203247" />
-    <SolidColorBrush x:Key="SecondaryTextBrush" Color="#66788A" />
+    <SolidColorBrush x:Key="PrimaryTextBrush" Color="#000000" />
+    <SolidColorBrush x:Key="SecondaryTextBrush" Color="#000000" />
     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="InputForegroundBrush" Color="#203247" />
+    <SolidColorBrush x:Key="InputForegroundBrush" Color="#000000" />
     <SolidColorBrush x:Key="GridLineBrush" Color="#E3E8EF" />
     <Style TargetType="Button">
       <Setter Property="Padding" Value="14,8" />
@@ -27,8 +27,23 @@
       <Setter Property="BorderBrush" Value="{DynamicResource GridLineBrush}" />
     </Style>
     <Style TargetType="ComboBox">
-      <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource InputForegroundBrush}" />
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="Foreground" Value="#000000" />
+    </Style>
+    <Style TargetType="ComboBoxItem">
+      <Setter Property="Foreground" Value="#000000" />
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="Padding" Value="8,5" />
+    </Style>
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Foreground" Value="#000000" />
+    </Style>
+    <Style TargetType="DataGridCell">
+      <Setter Property="Foreground" Value="#000000" />
+    </Style>
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Foreground" Value="#000000" />
+      <Setter Property="Background" Value="#E9EEF5" />
     </Style>
     <Style TargetType="DataGrid">
       <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
