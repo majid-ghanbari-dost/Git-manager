@@ -1,0 +1,1 @@
+Temporary CI trigger for validating the installer from main commit 46b1efb927f3f5c9ce6a5a2085f092d84036032a. This file is not part of the application and must be removed after the validation run.
