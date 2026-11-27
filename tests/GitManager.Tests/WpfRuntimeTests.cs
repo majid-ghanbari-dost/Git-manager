@@ -68,6 +68,9 @@ public sealed class WpfRuntimeTests
     [Fact]
     public void MainWindow_Show_ReachesLoaded_AndCloses() => StaWpf.Run(() =>
     {
+        // GitHub-hosted Windows runners execute tests in non-interactive Session 0.
+        // The installed-app smoke test exercises real startup in its dedicated step.
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true") return;
         StaWpf.EnsureApp();
         var workspace = Path.Combine(Path.GetTempPath(), "GitManagerWpfRuntimeTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspace);
@@ -119,6 +122,9 @@ public sealed class WpfRuntimeTests
     [Fact]
     public void MainWindow_Show_CenterScreen_ReachesLoaded() => StaWpf.Run(() =>
     {
+        // GitHub-hosted Windows runners execute tests in non-interactive Session 0.
+        // The installed-app smoke test exercises real startup in its dedicated step.
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true") return;
         StaWpf.EnsureApp();
         var workspace = Path.Combine(Path.GetTempPath(), "GitManagerWpfRuntimeTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workspace);
