@@ -6,7 +6,7 @@ A Windows desktop application for organizing, cloning, backing up, restoring, an
 
 ## Current implementation
 
-Work is stacked on isolated branches and has not been merged into `main`. WP-2.3 added physical lifecycle moves. WP-2.4 on `work/wp-2-4-windows-productization` adds a self-contained Windows x64 installer (`GitManager-Setup-x64.exe`), portable ZIP, SHA-256 checksums, and a Windows-runner install/uninstall smoke. WP-2.5.1 on `work/wp-2-5-1-journal-clone-bootstrap` bootstraps the operation journal so first-run Clone is not blocked by a missing SQLite table, and keeps the library open if recovery fails. Uninstall does not delete the user workspace or LocalAppData catalog/journal. This is not a signed production release and is not a Product Owner clean-machine test. Publishing and submodule/LFS fidelity remain incomplete.
+**Current main includes WP-2.3 through WP-2.5.6.** Version 2.5.6 is built as a self-contained Windows x64 installer (`GitManager-Setup-x64.exe`) and a separate portable ZIP. Windows CI run [45945175034](https://github.com/majid-ghanbari-dost/Git-manager/actions/runs/45945175034) passed restore, build, unit tests, publish, installer packaging, and install/launch/repair/upgrade/uninstall smoke. Installer, portable, source handoff, test results, and install evidence are available as separate Actions artifacts on that run (retained until 2027-02-25). This is not a signed production release or a Product Owner clean-machine/interactive visual test. Submodule/LFS backup fidelity remains incomplete.
 
 See [implementation status](docs/IMPLEMENTATION-STATUS.md) for completed work and limitations.
 
